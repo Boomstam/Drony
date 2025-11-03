@@ -19,7 +19,8 @@ public class ProceduralRotor : MonoBehaviour
     [SerializeField] private float bladeWidth = 0.2f;
     [SerializeField] private float bladeThickness = 0.05f;
     [SerializeField] private BladeShape bladeShape = BladeShape.Triangular;
-    [SerializeField, Range(0f, 1f)] private float bladeCurveAmount = 0.2f;
+    [SerializeField, Range(-1f, 1f)] private float bladeCurveAmount = 0.2f; // Negative curves backward, positive curves forward
+    [SerializeField, Range(0f, 3f)] private float petalShape = 1f; // 0 = hourglass, 1 = straight, >1 = petal bulge
 
     [Header("Hub Settings")]
     [SerializeField] private float hubRadius = 0.15f;
@@ -187,7 +188,9 @@ public class ProceduralRotor : MonoBehaviour
                 break;
         }
 
-        triangles = GenerateBladeTriangles(vertices.Length);
+        // Determine if we need segmented triangles (for petal shapes or curved blades)
+        bool needsSegmentedTriangles = (Mathf.Abs(petalShape - 1f) > 0.01f) || (bladeShape == BladeShape.Curved);
+        triangles = GenerateBladeTriangles(vertices.Length, needsSegmentedTriangles);
 
         mesh.vertices = vertices;
         mesh.triangles = triangles;
@@ -198,8 +201,15 @@ public class ProceduralRotor : MonoBehaviour
 
     private Vector3[] GenerateTriangularBladeVertices(float halfWidth, float halfThickness)
     {
-        // Tapered tip - narrows to a point at the end
-        float tipWidth = halfWidth * 0.1f; // 10% of base width at tip
+        // Tapered tip with optional petal/hourglass shape
+        // Use multiple segments if petal shape is not at neutral (1.0)
+        if (Mathf.Abs(petalShape - 1f) > 0.01f)
+        {
+            return GeneratePetalShapedBladeVertices(halfWidth, halfThickness, true);
+        }
+        
+        // Simple 4-vertex triangle for non-petal
+        float tipWidth = halfWidth * 0.15f;
 
         return new Vector3[]
         {
@@ -219,7 +229,13 @@ public class ProceduralRotor : MonoBehaviour
 
     private Vector3[] GenerateRectangularBladeVertices(float halfWidth, float halfThickness)
     {
-        // Bullnose style - full width throughout
+        // Bullnose style with optional petal/hourglass shape
+        if (Mathf.Abs(petalShape - 1f) > 0.01f)
+        {
+            return GeneratePetalShapedBladeVertices(halfWidth, halfThickness, false);
+        }
+        
+        // Simple rectangular blade
         return new Vector3[]
         {
             // Front face (top)
@@ -236,6 +252,39 @@ public class ProceduralRotor : MonoBehaviour
         };
     }
 
+    private Vector3[] GeneratePetalShapedBladeVertices(float halfWidth, float halfThickness, bool tapered)
+    {
+        // Generate blade with petal shape using multiple segments
+        int segments = 8;
+        List<Vector3> verticesList = new List<Vector3>();
+
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = (float)i / segments;
+            float x = t * bladeLength;
+            
+            // Calculate width at this point using petal curve
+            float widthAtPoint = CalculateBladeWidthAtPoint(t, halfWidth);
+
+            // Top surface
+            verticesList.Add(new Vector3(x, halfThickness, -widthAtPoint));
+            verticesList.Add(new Vector3(x, halfThickness, widthAtPoint));
+        }
+
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = (float)i / segments;
+            float x = t * bladeLength;
+            float widthAtPoint = CalculateBladeWidthAtPoint(t, halfWidth);
+
+            // Bottom surface
+            verticesList.Add(new Vector3(x, -halfThickness, -widthAtPoint));
+            verticesList.Add(new Vector3(x, -halfThickness, widthAtPoint));
+        }
+
+        return verticesList.ToArray();
+    }
+
     private Vector3[] GenerateCurvedBladeVertices(float halfWidth, float halfThickness)
     {
         // Petal/scimitar style - curved swept shape
@@ -246,18 +295,19 @@ public class ProceduralRotor : MonoBehaviour
         {
             float t = (float)i / segments;
             
-            // Width tapers from base to tip (like triangular)
-            float widthAtPoint = Mathf.Lerp(halfWidth, halfWidth * 0.15f, t);
+            // Width calculation using petal shape
+            float widthAtPoint = CalculateBladeWidthAtPoint(t, halfWidth);
             
             // Add sideways sweep/curve using a smooth curve
-            // This creates the "scimitar" swept-back look
-            // bladeCurveAmount controls the intensity (0 = straight, 1 = maximum curve)
+            // bladeCurveAmount controls intensity and direction
+            // Positive = sweep forward, Negative = sweep backward
             float sweepCurve = t * t * bladeLength * bladeCurveAmount;
             
             // To maintain constant radius, we need to compensate the X position
             // When we sweep in Z, we reduce X so that sqrt(x^2 + z^2) = bladeLength * t
             float targetRadius = t * bladeLength;
-            float actualX = Mathf.Sqrt(targetRadius * targetRadius - sweepCurve * sweepCurve);
+            float sweepCurveAbs = Mathf.Abs(sweepCurve);
+            float actualX = Mathf.Sqrt(Mathf.Max(0, targetRadius * targetRadius - sweepCurveAbs * sweepCurveAbs));
             
             // Fallback to linear if the math doesn't work out (sweep too large)
             if (float.IsNaN(actualX))
@@ -265,7 +315,7 @@ public class ProceduralRotor : MonoBehaviour
                 actualX = targetRadius;
             }
 
-            // Top surface - sweep creates offset in positive Z (trailing edge swept back)
+            // Top surface - sweep creates offset in Z
             verticesList.Add(new Vector3(actualX, halfThickness, -widthAtPoint + sweepCurve));
             verticesList.Add(new Vector3(actualX, halfThickness, widthAtPoint + sweepCurve));
         }
@@ -273,11 +323,12 @@ public class ProceduralRotor : MonoBehaviour
         for (int i = 0; i <= segments; i++)
         {
             float t = (float)i / segments;
-            float widthAtPoint = Mathf.Lerp(halfWidth, halfWidth * 0.15f, t);
+            float widthAtPoint = CalculateBladeWidthAtPoint(t, halfWidth);
             float sweepCurve = t * t * bladeLength * bladeCurveAmount;
             
             float targetRadius = t * bladeLength;
-            float actualX = Mathf.Sqrt(targetRadius * targetRadius - sweepCurve * sweepCurve);
+            float sweepCurveAbs = Mathf.Abs(sweepCurve);
+            float actualX = Mathf.Sqrt(Mathf.Max(0, targetRadius * targetRadius - sweepCurveAbs * sweepCurveAbs));
             
             if (float.IsNaN(actualX))
             {
@@ -292,10 +343,62 @@ public class ProceduralRotor : MonoBehaviour
         return verticesList.ToArray();
     }
 
-    private int[] GenerateBladeTriangles(int vertexCount)
+    private float CalculateBladeWidthAtPoint(float t, float halfWidth)
     {
-        // For simple quad-based blades (triangular and rectangular)
-        if (bladeShape != BladeShape.Curved)
+        // t goes from 0 (base) to 1 (tip)
+        
+        // Bulge curve: parabola that peaks at t=0.5
+        float bulgeCurve = 4f * t * (1f - t); // Peaks at 0.5 with value of 1.0
+        
+        float tipWidth = halfWidth * 0.1f;
+        
+        // Base linear taper (what we get at petalShape = 1)
+        float linearWidth = Mathf.Lerp(halfWidth, tipWidth, t);
+        
+        if (petalShape < 1f)
+        {
+            // HOURGLASS MODE (0 to 1)
+            // At 0: pinches to near-zero at the middle
+            // At 1: linear taper
+            
+            float hourglassAmount = 1f - petalShape; // 0 = no hourglass, 1 = extreme hourglass
+            
+            // Pinch width: inverse of bulge curve (narrow in middle, wide at ends)
+            float pinchFactor = 1f - bulgeCurve; // 0 at middle, 1 at ends
+            
+            // Extreme hourglass can go very narrow
+            float minPinchWidth = halfWidth * 0.01f; // Nearly a point
+            float hourglassWidth = Mathf.Lerp(linearWidth, minPinchWidth, bulgeCurve * hourglassAmount);
+            
+            return hourglassWidth;
+        }
+        else if (petalShape > 1f)
+        {
+            // PETAL BULGE MODE (1+)
+            // petalShape value is the width multiplier at the peak
+            
+            float bulgeMultiplier = petalShape; // 2.0 = 200% width, 3.0 = 300%, etc.
+            float maxBulgeWidth = halfWidth * bulgeMultiplier;
+            
+            // Petal: starts narrow, bulges out, tapers to tip
+            float petalWidth = Mathf.Lerp(halfWidth * 0.6f, maxBulgeWidth, bulgeCurve);
+            
+            // Quadratic taper to tip
+            petalWidth = Mathf.Lerp(petalWidth, tipWidth, t * t);
+            
+            return petalWidth;
+        }
+        else
+        {
+            // petalShape == 1: straight linear taper
+            return linearWidth;
+        }
+    }
+
+    private int[] GenerateBladeTriangles(int vertexCount, bool needsSegmentedTriangles)
+    {
+        // For simple quad-based blades (triangular and rectangular without petal)
+        if (!needsSegmentedTriangles)
         {
             return new int[]
             {
@@ -398,8 +501,9 @@ public class ProceduralRotor : MonoBehaviour
     {
         Mesh mesh = new Mesh();
         
-        // Ring is 10% larger than the rotor blade reach
-        float ringRadius = (hubRadius + bladeLength) * 1.1f;
+        // Ring inner edge should be 10% larger than the rotor blade reach
+        float bladeReach = hubRadius + bladeLength;
+        float ringInnerRadius = bladeReach * 1.1f;
         
         int segments = 32;
         int vertexCount = (segments + 1) * 2;
@@ -408,8 +512,9 @@ public class ProceduralRotor : MonoBehaviour
         Vector3[] vertices = new Vector3[vertexCount];
         int[] triangles = new int[triangleCount * 3];
         
-        float innerRadius = ringRadius - ringThickness * 0.5f;
-        float outerRadius = ringRadius + ringThickness * 0.5f;
+        // Ring extends outward from the inner radius
+        float innerRadius = ringInnerRadius;
+        float outerRadius = ringInnerRadius + ringThickness;
         
         int vertIndex = 0;
         int triIndex = 0;
