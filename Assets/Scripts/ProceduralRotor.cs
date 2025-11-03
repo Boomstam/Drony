@@ -21,6 +21,7 @@ public class ProceduralRotor : MonoBehaviour
     [SerializeField] private BladeShape bladeShape = BladeShape.Triangular;
     [SerializeField, Range(-1f, 1f)] private float bladeCurveAmount = 0.2f; // Negative curves backward, positive curves forward
     [SerializeField, Range(0f, 3f)] private float petalShape = 1f; // 0 = hourglass, 1 = straight, >1 = petal bulge
+    [SerializeField, Range(-1f, 1f)] private float bladeTwist = 0f; // Twist along blade length: -1 = -180°, 0 = flat, 1 = +180°
 
     [Header("Hub Settings")]
     [SerializeField] private float hubRadius = 0.15f;
@@ -211,7 +212,7 @@ public class ProceduralRotor : MonoBehaviour
         // Simple 4-vertex triangle for non-petal
         float tipWidth = halfWidth * 0.15f;
 
-        return new Vector3[]
+        Vector3[] vertices = new Vector3[]
         {
             // Front face (top)
             new Vector3(0, halfThickness, -halfWidth),           // Base left
@@ -225,6 +226,15 @@ public class ProceduralRotor : MonoBehaviour
             new Vector3(bladeLength, -halfThickness, tipWidth),
             new Vector3(0, -halfThickness, halfWidth),
         };
+        
+        // Apply tilt to all vertices
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            float t = vertices[i].x / bladeLength; // Calculate t based on X position
+            vertices[i] = ApplyBladeTwist(vertices[i], t);
+        }
+        
+        return vertices;
     }
 
     private Vector3[] GenerateRectangularBladeVertices(float halfWidth, float halfThickness)
@@ -236,7 +246,7 @@ public class ProceduralRotor : MonoBehaviour
         }
         
         // Simple rectangular blade
-        return new Vector3[]
+        Vector3[] vertices = new Vector3[]
         {
             // Front face (top)
             new Vector3(0, halfThickness, -halfWidth),
@@ -250,6 +260,15 @@ public class ProceduralRotor : MonoBehaviour
             new Vector3(bladeLength, -halfThickness, halfWidth),
             new Vector3(0, -halfThickness, halfWidth),
         };
+        
+        // Apply tilt to all vertices
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            float t = vertices[i].x / bladeLength; // Calculate t based on X position
+            vertices[i] = ApplyBladeTwist(vertices[i], t);
+        }
+        
+        return vertices;
     }
 
     private Vector3[] GeneratePetalShapedBladeVertices(float halfWidth, float halfThickness, bool tapered)
@@ -267,8 +286,11 @@ public class ProceduralRotor : MonoBehaviour
             float widthAtPoint = CalculateBladeWidthAtPoint(t, halfWidth);
 
             // Top surface
-            verticesList.Add(new Vector3(x, halfThickness, -widthAtPoint));
-            verticesList.Add(new Vector3(x, halfThickness, widthAtPoint));
+            Vector3 topLeft = new Vector3(x, halfThickness, -widthAtPoint);
+            Vector3 topRight = new Vector3(x, halfThickness, widthAtPoint);
+            
+            verticesList.Add(ApplyBladeTwist(topLeft, t));
+            verticesList.Add(ApplyBladeTwist(topRight, t));
         }
 
         for (int i = 0; i <= segments; i++)
@@ -278,8 +300,11 @@ public class ProceduralRotor : MonoBehaviour
             float widthAtPoint = CalculateBladeWidthAtPoint(t, halfWidth);
 
             // Bottom surface
-            verticesList.Add(new Vector3(x, -halfThickness, -widthAtPoint));
-            verticesList.Add(new Vector3(x, -halfThickness, widthAtPoint));
+            Vector3 bottomLeft = new Vector3(x, -halfThickness, -widthAtPoint);
+            Vector3 bottomRight = new Vector3(x, -halfThickness, widthAtPoint);
+            
+            verticesList.Add(ApplyBladeTwist(bottomLeft, t));
+            verticesList.Add(ApplyBladeTwist(bottomRight, t));
         }
 
         return verticesList.ToArray();
@@ -316,8 +341,11 @@ public class ProceduralRotor : MonoBehaviour
             }
 
             // Top surface - sweep creates offset in Z
-            verticesList.Add(new Vector3(actualX, halfThickness, -widthAtPoint + sweepCurve));
-            verticesList.Add(new Vector3(actualX, halfThickness, widthAtPoint + sweepCurve));
+            Vector3 topLeft = new Vector3(actualX, halfThickness, -widthAtPoint + sweepCurve);
+            Vector3 topRight = new Vector3(actualX, halfThickness, widthAtPoint + sweepCurve);
+            
+            verticesList.Add(ApplyBladeTwist(topLeft, t));
+            verticesList.Add(ApplyBladeTwist(topRight, t));
         }
 
         for (int i = 0; i <= segments; i++)
@@ -336,11 +364,51 @@ public class ProceduralRotor : MonoBehaviour
             }
 
             // Bottom surface
-            verticesList.Add(new Vector3(actualX, -halfThickness, -widthAtPoint + sweepCurve));
-            verticesList.Add(new Vector3(actualX, -halfThickness, widthAtPoint + sweepCurve));
+            Vector3 bottomLeft = new Vector3(actualX, -halfThickness, -widthAtPoint + sweepCurve);
+            Vector3 bottomRight = new Vector3(actualX, -halfThickness, widthAtPoint + sweepCurve);
+            
+            verticesList.Add(ApplyBladeTwist(bottomLeft, t));
+            verticesList.Add(ApplyBladeTwist(bottomRight, t));
         }
 
         return verticesList.ToArray();
+    }
+
+    private Vector3 ApplyBladeTwist(Vector3 position, float t)
+    {
+        // t goes from 0 (base) to 1 (tip)
+        // Twist progressively rotates the blade's cross-section around the radial direction
+        // This creates the propeller pitch/twist effect
+        
+        if (Mathf.Abs(bladeTwist) < 0.01f)
+        {
+            return position; // No twist, skip calculation
+        }
+        
+        // Calculate rotation angle at this point along the blade
+        // bladeTwist ranges from -1 to 1, corresponding to -180° to +180°
+        float maxTwistDegrees = 180f;
+        float twistAngleAtPoint = bladeTwist * maxTwistDegrees * t; // Linear progression from 0 to max twist
+        float twistRadians = twistAngleAtPoint * Mathf.Deg2Rad;
+        
+        // The blade is generated extending in +X direction (radially outward)
+        // The blade's "thickness" is in Y, and "width" is in Z
+        // We want to twist the thickness (Y) and width (Z) as we go along the blade (X)
+        // BUT: we need to twist around the RADIAL axis (which is the blade's local forward/X axis)
+        
+        // Actually, for a propeller twist, we want the blade face to rotate
+        // The blade starts "flat" (facing up in +Y), and twists so the face angles
+        // This means rotating the Y-Z cross-section around the X-axis (radial axis)
+        
+        float x = position.x; // X position stays the same (distance along blade)
+        float y = position.y; // Thickness direction
+        float z = position.z; // Width direction
+        
+        // Rotate the cross-section (Y-Z) around the blade's radial axis (X)
+        float rotatedY = y * Mathf.Cos(twistRadians) - z * Mathf.Sin(twistRadians);
+        float rotatedZ = y * Mathf.Sin(twistRadians) + z * Mathf.Cos(twistRadians);
+        
+        return new Vector3(x, rotatedY, rotatedZ);
     }
 
     private float CalculateBladeWidthAtPoint(float t, float halfWidth)

@@ -36,6 +36,9 @@ public class ProceduralRotorEditor : Editor
         // Always show petal shape - works with all blade types
         EditorGUILayout.PropertyField(serializedObject.FindProperty("petalShape"));
         
+        // Always show blade twist - works with all blade types
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("bladeTwist"));
+        
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Hub Settings", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(serializedObject.FindProperty("hubRadius"));
