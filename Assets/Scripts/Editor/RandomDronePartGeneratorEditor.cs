@@ -14,7 +14,7 @@ public class RandomDronePartGeneratorEditor : Editor
 
         // Randomize All button - light green, biggest
         GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
-        if (GUILayout.Button("Randomize All (Hub + Rotors + Layout)", GUILayout.Height(40)))
+        if (GUILayout.Button("Randomize All (Hub + Rotors + Arms + Layout)", GUILayout.Height(40)))
         {
             generator.RandomizeAll();
         }
