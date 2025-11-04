@@ -3,7 +3,7 @@ using UnityEngine;
 public class ProceduralDroneHub : MonoBehaviour
 {
     [Header("Mesh Reference")]
-    [SerializeField] private MeshFilter meshFilter;
+    [SerializeField] public MeshFilter meshFilter;
 
     [Header("Hub Base Shape")]
     [SerializeField] public BaseShape baseShape = BaseShape.Sphere;

@@ -1,24 +1,29 @@
 using UnityEngine;
+using System.Collections.Generic;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class RandomDronePartGenerator : MonoBehaviour
 {
     [Header("Component References")]
-    [SerializeField] private ProceduralDroneHub droneHub;
-    [SerializeField] private ProceduralRotor droneRotor;
+    [SerializeField] private ProceduralDroneHub droneHubPrefab;
+    [SerializeField] private ProceduralRotor droneRotorPrefab;
+
+    [Header("Generated Instances (Do Not Assign)")]
+    private ProceduralDroneHub generatedHub;
+    private List<ProceduralRotor> generatedRotors = new List<ProceduralRotor>();
 
     [Header("Seeds")]
     [SerializeField] private int mainSeed = 42;
     [SerializeField] private int rotorSeed = 100;
     [SerializeField] private int hubSeed = 200;
 
-    // Track previous values to detect manual changes
-    private int previousMainSeed;
-    private int previousRotorSeed;
-    private int previousHubSeed;
-
-    [Header("Meta Parameters")]
-    [SerializeField] private int rotorCount = 4; // For future use: 4, 6, or 8 rotors
-    [SerializeField] private bool autoGenerateMeshes = true; // Automatically call Generate methods after randomization
+    [Header("Layout Parameters")]
+    [SerializeField] private int rotorCount = 4; // 4, 6, or 8 rotors
+    [SerializeField] private Vector2 rotorDistanceRange = new Vector2(1.5f, 3.0f); // INCREASED from original to prevent touching
+    [SerializeField] private Vector2 rotorVerticalOffsetRange = new Vector2(-0.3f, 0.3f);
+    [SerializeField] private Vector2 rotorTiltAngleRange = new Vector2(-15f, 15f);
 
     [Header("Randomization Ranges")]
     [SerializeField] private Vector2 bladeLengthRange = new Vector2(0.5f, 2.5f);
@@ -30,205 +35,299 @@ public class RandomDronePartGenerator : MonoBehaviour
     [SerializeField] private Vector2 hubScaleRange = new Vector2(0.2f, 1.0f);
     [SerializeField, Range(0f, 1f)] private float ringProbability = 0.3f;
 
+    // Current randomized layout values (for re-randomizing with same parts)
+    private float currentRotorDistance;
+    private float currentVerticalOffset;
+    private float currentTiltAngle;
+
     public void RandomizeAll()
     {
-        // Generate a new random seed
+        // Generate NEW seeds for everything (as if all buttons were pressed)
+        mainSeed = Random.Range(0, 1000000);
+        rotorSeed = Random.Range(0, 1000000);
+        hubSeed = Random.Range(0, 1000000);
+        
+        // Create objects if they don't exist
+        EnsureComponentsExist();
+        
+        // Use the new seeds to randomize everything
+        Random.InitState(hubSeed);
+        RandomizeHubInternal();
+        
+        Random.InitState(rotorSeed);
+        RandomizeRotorInternal();
+        
+        Random.InitState(mainSeed);
+        RandomizeLayoutInternal(mainSeed);
+        
+        #if UNITY_EDITOR
+        EditorUtility.SetDirty(this);
+        #endif
+        
+        Debug.Log($"Randomized all | mainSeed: {mainSeed} | rotorSeed: {rotorSeed} | hubSeed: {hubSeed}");
+    }
+
+    public void RandomizeLayout()
+    {
+        // Generate new main seed for layout
         mainSeed = Random.Range(0, 1000000);
         Random.InitState(mainSeed);
+        RandomizeLayoutInternal(mainSeed);
         
-        // Randomize both components
-        RandomizeRotorParameters();
-        RandomizeHubParameters();
-        
-        // Generate meshes if auto-generate is enabled
-        if (autoGenerateMeshes)
+        #if UNITY_EDITOR
+        EditorUtility.SetDirty(this);
+        #endif
+    }
+
+    private void EnsureComponentsExist()
+    {
+        // Delete old instances if they exist
+        if (generatedHub != null)
         {
-            if (droneRotor != null) droneRotor.GenerateRotor();
-            if (droneHub != null) droneHub.GenerateHub();
+            DestroyImmediate(generatedHub.gameObject);
+            generatedHub = null;
         }
         
-        Debug.Log($"Randomized all with new main seed: {mainSeed}");
+        foreach (var rotor in generatedRotors)
+        {
+            if (rotor != null)
+            {
+                DestroyImmediate(rotor.gameObject);
+            }
+        }
+        generatedRotors.Clear();
+
+        // Create new hub instance as child
+        if (droneHubPrefab != null)
+        {
+            GameObject hubObj = new GameObject("GeneratedHub");
+            hubObj.transform.SetParent(transform);
+            hubObj.transform.localPosition = Vector3.zero;
+            hubObj.transform.localRotation = Quaternion.identity;
+            
+            MeshFilter hubMF = hubObj.AddComponent<MeshFilter>();
+            MeshRenderer hubMR = hubObj.AddComponent<MeshRenderer>();
+            generatedHub = hubObj.AddComponent<ProceduralDroneHub>();
+            
+            // Copy material from prefab
+            MeshRenderer prefabMR = droneHubPrefab.GetComponent<MeshRenderer>();
+            if (prefabMR != null && prefabMR.sharedMaterial != null)
+            {
+                hubMR.sharedMaterial = prefabMR.sharedMaterial;
+            }
+            
+            // Assign the meshFilter using the public field
+            generatedHub.meshFilter = hubMF;
+        }
+
+        // Create multiple rotor instances based on rotorCount
+        if (droneRotorPrefab != null)
+        {
+            for (int i = 0; i < rotorCount; i++)
+            {
+                GameObject rotorObj = new GameObject($"GeneratedRotor_{i}");
+                rotorObj.transform.SetParent(transform);
+                rotorObj.transform.localPosition = Vector3.zero;
+                rotorObj.transform.localRotation = Quaternion.identity;
+                
+                MeshFilter rotorMF = rotorObj.AddComponent<MeshFilter>();
+                MeshRenderer rotorMR = rotorObj.AddComponent<MeshRenderer>();
+                ProceduralRotor rotor = rotorObj.AddComponent<ProceduralRotor>();
+                
+                // Copy material from prefab
+                MeshRenderer prefabMR = droneRotorPrefab.GetComponent<MeshRenderer>();
+                if (prefabMR != null && prefabMR.sharedMaterial != null)
+                {
+                    rotorMR.sharedMaterial = prefabMR.sharedMaterial;
+                }
+                
+                // Assign the meshFilter using the public field
+                rotor.meshFilter = rotorMF;
+                
+                generatedRotors.Add(rotor);
+            }
+        }
+    }
+
+    private void RandomizeLayoutInternal(int seed)
+    {
+        Random.InitState(seed);
+        
+        // Randomize rotor count
+        float rand = Random.value;
+        if (rand < 0.33f) rotorCount = 4;
+        else if (rand < 0.66f) rotorCount = 6;
+        else rotorCount = 8;
+
+        // Calculate safe minimum distance based on hub size and rotor blade length
+        float hubMaxDimension = 0.5f;
+        float rotorMaxLength = 1.0f;
+        
+        if (generatedHub != null)
+        {
+            hubMaxDimension = Mathf.Max(generatedHub.scale.x, generatedHub.scale.y, generatedHub.scale.z);
+        }
+        
+        if (generatedRotors.Count > 0 && generatedRotors[0] != null)
+        {
+            rotorMaxLength = generatedRotors[0].bladeLength + generatedRotors[0].hubRadius;
+        }
+
+        // Set minimum distance to ensure no overlap: hub radius + rotor length + safety margin
+        float minSafeDistance = (hubMaxDimension * 0.5f) + rotorMaxLength + 0.5f;
+        float actualMinDistance = Mathf.Max(rotorDistanceRange.x, minSafeDistance);
+        
+        // Randomize layout parameters with safe distances
+        currentRotorDistance = Mathf.Lerp(actualMinDistance, rotorDistanceRange.y, Random.value);
+        currentVerticalOffset = Mathf.Lerp(rotorVerticalOffsetRange.x, rotorVerticalOffsetRange.y, Random.value);
+        currentTiltAngle = Mathf.Lerp(rotorTiltAngleRange.x, rotorTiltAngleRange.y, Random.value);
+
+        // Position all rotors in a circle around the hub
+        float angleStep = 360f / rotorCount;
+        for (int i = 0; i < generatedRotors.Count && i < rotorCount; i++)
+        {
+            if (generatedRotors[i] != null)
+            {
+                float angle = i * angleStep * Mathf.Deg2Rad;
+                Vector3 position = new Vector3(
+                    Mathf.Cos(angle) * currentRotorDistance,
+                    currentVerticalOffset,
+                    Mathf.Sin(angle) * currentRotorDistance
+                );
+                
+                generatedRotors[i].transform.localPosition = position;
+                generatedRotors[i].transform.localRotation = Quaternion.Euler(currentTiltAngle, 0, 0);
+            }
+        }
+        
+        Debug.Log($"Randomized layout with seed: {seed} | Rotors: {rotorCount} | Distance: {currentRotorDistance:F2} | Safe minimum was: {minSafeDistance:F2}");
     }
 
     public void RandomizeRotor()
     {
-        // Generate a new random seed for the rotor
-        rotorSeed = Random.Range(0, 1000000);
-        
-        RandomizeRotorParameters();
-        
-        // Generate mesh if auto-generate is enabled
-        if (autoGenerateMeshes && droneRotor != null)
+        if (generatedRotors.Count == 0)
         {
-            droneRotor.GenerateRotor();
-        }
-    }
-
-    private void RandomizeRotorParameters()
-    {
-        if (droneRotor == null)
-        {
-            Debug.LogError("ProceduralRotor reference is not assigned!");
+            Debug.LogError("No rotors exist! Use Randomize All first.");
             return;
         }
 
+        // Generate new rotor seed
+        rotorSeed = Random.Range(0, 1000000);
         Random.InitState(rotorSeed);
-
-        // Basic blade parameters
-        droneRotor.numberOfBlades = Random.Range(2, 9); // 2-8 inclusive
+        RandomizeRotorInternal();
         
-        // Blade dimensions with smart constraints
-        float baseBladeLengthFactor = Random.value; // 0 to 1
-        droneRotor.bladeLength = Mathf.Lerp(bladeLengthRange.x, bladeLengthRange.y, baseBladeLengthFactor);
-        
-        // More blades → thinner individual blades
-        float bladeCountFactor = 1f - ((droneRotor.numberOfBlades - 2) / 6f) * 0.4f; // Reduces width by up to 40%
-        float baseBladeWidth = Mathf.Lerp(bladeWidthRange.x, bladeWidthRange.y, Random.value);
-        droneRotor.bladeWidth = baseBladeWidth * bladeCountFactor;
-        
-        droneRotor.bladeThickness = Mathf.Lerp(bladeThicknessRange.x, bladeThicknessRange.y, Random.value);
+        #if UNITY_EDITOR
+        EditorUtility.SetDirty(this);
+        #endif
 
-        // Blade shape
-        droneRotor.bladeShape = (BladeShape)Random.Range(0, 3); // Triangular, Rectangular, Curved
+        Debug.Log($"Randomized rotor with seed: {rotorSeed}");
+    }
 
-        // Blade deformations
-        droneRotor.bladeCurveAmount = Random.Range(-1f, 1f);
-        droneRotor.petalShape = Random.Range(0f, 3f);
-        droneRotor.bladeTwist = Random.Range(-1f, 1f);
+    private void RandomizeRotorInternal()
+    {
+        // Randomize number of blades
+        int numBlades = Random.Range(2, 9); // 2-8 blades
 
-        // Hub sizing - proportional to blade length but with variance
-        float hubSizeFactor = baseBladeLengthFactor * 0.7f + Random.value * 0.3f; // Some correlation, some independence
-        droneRotor.hubRadius = Mathf.Lerp(hubRadiusRange.x, hubRadiusRange.y, hubSizeFactor);
-        droneRotor.hubHeight = Mathf.Lerp(hubHeightRange.x, hubHeightRange.y, Random.value);
+        // Blade dimensions - more blades = thinner blades
+        float bladeWidthModifier = 1f - ((numBlades - 2) / 6f) * 0.4f; // Up to 40% thinner with 8 blades
+        float bladeLength = Mathf.Lerp(bladeLengthRange.x, bladeLengthRange.y, Random.value);
+        float bladeWidth = Mathf.Lerp(bladeWidthRange.x, bladeWidthRange.y, Random.value) * bladeWidthModifier;
+        float bladeThickness = Mathf.Lerp(bladeThicknessRange.x, bladeThicknessRange.y, Random.value);
 
-        // Ring - independent probability
-        droneRotor.includeRing = Random.value < ringProbability;
-        droneRotor.ringThickness = Mathf.Lerp(ringThicknessRange.x, ringThicknessRange.y, Random.value);
+        // Blade shape and deformations
+        BladeShape bladeShape = (BladeShape)Random.Range(0, 3);
+        float bladeCurveAmount = Random.Range(-1f, 1f);
+        float petalShape = Mathf.Lerp(0f, 3f, Random.value);
+        float bladeTwist = Random.Range(-1f, 1f);
 
-        // Randomize rotor count for future use
-        int[] validRotorCounts = { 4, 6, 8 };
-        rotorCount = validRotorCounts[Random.Range(0, validRotorCounts.Length)];
+        // Hub dimensions
+        float hubRadius = Mathf.Lerp(hubRadiusRange.x, hubRadiusRange.y, Random.value);
+        float hubHeight = Mathf.Lerp(hubHeightRange.x, hubHeightRange.y, Random.value);
 
-        Debug.Log($"Randomized rotor with seed: {rotorSeed} | Blades: {droneRotor.numberOfBlades} | Shape: {droneRotor.bladeShape} | Ring: {droneRotor.includeRing}");
+        // Ring - probability based
+        bool includeRing = Random.value < ringProbability;
+        float ringThickness = includeRing ? Mathf.Lerp(ringThicknessRange.x, ringThicknessRange.y, Random.value) : 0.05f;
+
+        // Apply to all rotors
+        foreach (var rotor in generatedRotors)
+        {
+            if (rotor != null)
+            {
+                rotor.numberOfBlades = numBlades;
+                rotor.bladeLength = bladeLength;
+                rotor.bladeWidth = bladeWidth;
+                rotor.bladeThickness = bladeThickness;
+                rotor.bladeShape = bladeShape;
+                rotor.bladeCurveAmount = bladeCurveAmount;
+                rotor.petalShape = petalShape;
+                rotor.bladeTwist = bladeTwist;
+                rotor.hubRadius = hubRadius;
+                rotor.hubHeight = hubHeight;
+                rotor.includeRing = includeRing;
+                rotor.ringThickness = ringThickness;
+                rotor.GenerateRotor();
+            }
+        }
     }
 
     public void RandomizeHub()
     {
-        // Generate a new random seed for the hub
-        hubSeed = Random.Range(0, 1000000);
-        
-        RandomizeHubParameters();
-        
-        // Generate mesh if auto-generate is enabled
-        if (autoGenerateMeshes && droneHub != null)
+        if (generatedHub == null)
         {
-            droneHub.GenerateHub();
-        }
-    }
-
-    private void RandomizeHubParameters()
-    {
-        if (droneHub == null)
-        {
-            Debug.LogError("ProceduralDroneHub reference is not assigned!");
+            Debug.LogError("No hub exists! Use Randomize All first.");
             return;
         }
 
+        // Generate new hub seed
+        hubSeed = Random.Range(0, 1000000);
         Random.InitState(hubSeed);
+        RandomizeHubInternal();
+        
+        #if UNITY_EDITOR
+        EditorUtility.SetDirty(this);
+        #endif
+        
+        Debug.Log($"Randomized hub with seed: {hubSeed}");
+    }
 
+    private void RandomizeHubInternal()
+    {
         // Base shape
-        droneHub.baseShape = (ProceduralDroneHub.BaseShape)Random.Range(0, 2); // Sphere or Cube
+        generatedHub.baseShape = (ProceduralDroneHub.BaseShape)Random.Range(0, 2); // Sphere or Cube
 
         // Scale - independent per axis for variety
-        droneHub.scale = new Vector3(
+        generatedHub.scale = new Vector3(
             Mathf.Lerp(hubScaleRange.x, hubScaleRange.y, Random.value),
             Mathf.Lerp(hubScaleRange.x, hubScaleRange.y, Random.value),
             Mathf.Lerp(hubScaleRange.x, hubScaleRange.y, Random.value)
         );
 
         // Taper deformation
-        droneHub.taper = Random.value; // 0 to 1
-        droneHub.taperDirection = (ProceduralDroneHub.TaperDirection)Random.Range(0, 2); // BottomToTop or BackToFront
+        generatedHub.taper = Random.value; // 0 to 1
+        generatedHub.taperDirection = (ProceduralDroneHub.TaperDirection)Random.Range(0, 2);
 
-        Debug.Log($"Randomized hub with seed: {hubSeed} | Shape: {droneHub.baseShape} | Taper: {droneHub.taper:F2} | Direction: {droneHub.taperDirection}");
+        generatedHub.GenerateHub();
     }
 
-    // Helper method to ensure rotor is proportional to hub size (if both are assigned)
-    private void EnsureProportions()
+    public void DeleteCurrentDrone()
     {
-        if (droneHub != null && droneRotor != null)
+        // Delete generated hub
+        if (generatedHub != null)
         {
-            // Get average hub scale
-            float avgHubScale = (droneHub.scale.x + droneHub.scale.y + droneHub.scale.z) / 3f;
-            
-            // If hub is large, allow longer blades
-            float hubInfluence = Mathf.Clamp(avgHubScale, 0.5f, 1.5f);
-            droneRotor.bladeLength *= hubInfluence;
-            
-            // Clamp to reasonable bounds
-            droneRotor.bladeLength = Mathf.Clamp(droneRotor.bladeLength, bladeLengthRange.x, bladeLengthRange.y * 1.2f);
-        }
-    }
-
-    // Called by editor when inspector values change
-    public void OnValidate()
-    {
-        // Check if main seed was manually changed
-        if (mainSeed != previousMainSeed)
-        {
-            previousMainSeed = mainSeed;
-            ApplyMainSeed();
+            DestroyImmediate(generatedHub.gameObject);
+            generatedHub = null;
         }
 
-        // Check if rotor seed was manually changed
-        if (rotorSeed != previousRotorSeed)
+        // Delete all generated rotors
+        foreach (var rotor in generatedRotors)
         {
-            previousRotorSeed = rotorSeed;
-            ApplyRotorSeed();
+            if (rotor != null)
+            {
+                DestroyImmediate(rotor.gameObject);
+            }
         }
+        generatedRotors.Clear();
 
-        // Check if hub seed was manually changed
-        if (hubSeed != previousHubSeed)
-        {
-            previousHubSeed = hubSeed;
-            ApplyHubSeed();
-        }
-    }
-
-    private void ApplyMainSeed()
-    {
-        Random.InitState(mainSeed);
-        
-        if (droneRotor != null)
-        {
-            RandomizeRotorParameters();
-            if (autoGenerateMeshes) droneRotor.GenerateRotor();
-        }
-        
-        if (droneHub != null)
-        {
-            RandomizeHubParameters();
-            if (autoGenerateMeshes) droneHub.GenerateHub();
-        }
-        
-        Debug.Log($"Applied main seed: {mainSeed}");
-    }
-
-    private void ApplyRotorSeed()
-    {
-        if (droneRotor != null)
-        {
-            RandomizeRotorParameters();
-            if (autoGenerateMeshes) droneRotor.GenerateRotor();
-        }
-    }
-
-    private void ApplyHubSeed()
-    {
-        if (droneHub != null)
-        {
-            RandomizeHubParameters();
-            if (autoGenerateMeshes) droneHub.GenerateHub();
-        }
+        Debug.Log("Deleted current drone");
     }
 }

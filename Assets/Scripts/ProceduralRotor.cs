@@ -11,7 +11,7 @@ public enum BladeShape
 public class ProceduralRotor : MonoBehaviour
 {
     [Header("Mesh Reference")]
-    [SerializeField] private MeshFilter meshFilter;
+    [SerializeField] public MeshFilter meshFilter;
 
     [Header("Blade Settings")]
     [SerializeField, Range(2, 8)] public int numberOfBlades = 4;
