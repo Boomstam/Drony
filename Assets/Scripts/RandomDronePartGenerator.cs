@@ -519,46 +519,63 @@ public class RandomDronePartGenerator : MonoBehaviour
 
     private Mesh GenerateArmWithRingAvoidance(Vector3 start, Vector3 end, ProceduralRotor rotor, float thickness)
     {
-        // Calculate ring parameters
+        // Calculate ring parameters in world space
         float bladeReach = rotor.hubRadius + rotor.bladeLength;
         float ringInnerRadius = bladeReach * 1.1f;
         float ringOuterRadius = ringInnerRadius + rotor.ringThickness;
         float avoidanceRadius = ringOuterRadius + ringClearance;
 
-        // Check if straight line intersects the ring
-        Vector3 ringCenter = end;
-        ringCenter.y = 0; // Ring is at y=0 in rotor's local space, but we need world space
+        // Ring center in world space (rotor position, at rotor's Y level)
+        Vector3 ringCenter = rotor.transform.localPosition;
 
-        Vector3 armDirection = (end - start).normalized;
-        float armLength = Vector3.Distance(start, end);
+        // Check if the arm path intersects with the ring's cylindrical volume
+        // We need to check the horizontal distance from the arm path to the ring center
+        Vector3 startFlat = new Vector3(start.x, ringCenter.y, start.z);
+        Vector3 endFlat = new Vector3(end.x, ringCenter.y, end.z);
+        Vector3 ringCenterFlat = new Vector3(ringCenter.x, ringCenter.y, ringCenter.z);
 
-        // Project start point onto ring plane (Y=0 for simplicity)
-        Vector3 startOnPlane = start;
-        startOnPlane.y = end.y;
-
-        float distanceToRingCenter = Vector3.Distance(new Vector3(startOnPlane.x, 0, startOnPlane.z), 
-                                                       new Vector3(end.x, 0, end.z));
+        // Find closest point on line segment to ring center
+        Vector3 lineDirection = (endFlat - startFlat).normalized;
+        float lineLength = Vector3.Distance(startFlat, endFlat);
+        
+        Vector3 toRingCenter = ringCenterFlat - startFlat;
+        float projectionLength = Vector3.Dot(toRingCenter, lineDirection);
+        projectionLength = Mathf.Clamp(projectionLength, 0, lineLength);
+        
+        Vector3 closestPoint = startFlat + lineDirection * projectionLength;
+        float distanceToRing = Vector3.Distance(closestPoint, ringCenterFlat);
 
         // If the arm passes through the ring area, create waypoints to go around
-        if (distanceToRingCenter < avoidanceRadius)
+        if (distanceToRing < avoidanceRadius)
         {
             List<Vector3> waypoints = new List<Vector3>();
             waypoints.Add(start);
 
-            // Calculate two waypoints that arc around the ring
-            Vector3 toRotor = (end - start);
-            Vector3 toRotorFlat = new Vector3(toRotor.x, 0, toRotor.z).normalized;
-            Vector3 perpendicular = Vector3.Cross(toRotorFlat, Vector3.up).normalized;
-
-            // Midpoint at avoidance radius
-            float midDistance = Vector3.Distance(start, end) * 0.5f;
-            Vector3 midPoint = start + (end - start) * 0.5f;
+            // Decide whether to go up or down based on the start position
+            bool goUp = start.y < ringCenter.y;
+            float verticalOffset = (avoidanceRadius - distanceToRing + ringClearance) * 1.5f;
             
-            // Offset midpoint to avoid ring
-            Vector3 offsetDirection = (midPoint - new Vector3(end.x, midPoint.y, end.z)).normalized;
-            midPoint += offsetDirection * (avoidanceRadius - distanceToRingCenter + ringClearance);
+            // Calculate the point where we need to start avoiding (approaching the ring)
+            Vector3 toEnd = end - start;
+            float totalDistance = toEnd.magnitude;
+            
+            // First waypoint: start curving up/down before hitting the ring
+            float approachDistance = totalDistance * 0.33f; // Start avoiding at 1/3 of the way
+            Vector3 approachPoint = start + toEnd.normalized * approachDistance;
+            approachPoint.y += goUp ? verticalOffset * 0.5f : -verticalOffset * 0.5f;
+            waypoints.Add(approachPoint);
 
-            waypoints.Add(midPoint);
+            // Second waypoint: maximum clearance point (at the ring's location horizontally)
+            Vector3 clearancePoint = start + toEnd.normalized * (totalDistance * 0.5f);
+            clearancePoint.y += goUp ? verticalOffset : -verticalOffset;
+            waypoints.Add(clearancePoint);
+
+            // Third waypoint: start descending/ascending back down/up
+            float exitDistance = totalDistance * 0.67f; // End avoiding at 2/3 of the way
+            Vector3 exitPoint = start + toEnd.normalized * exitDistance;
+            exitPoint.y += goUp ? verticalOffset * 0.5f : -verticalOffset * 0.5f;
+            waypoints.Add(exitPoint);
+
             waypoints.Add(end);
 
             return GenerateSegmentedArm(waypoints, thickness);
