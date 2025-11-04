@@ -14,22 +14,22 @@ public class ProceduralRotor : MonoBehaviour
     [SerializeField] private MeshFilter meshFilter;
 
     [Header("Blade Settings")]
-    [SerializeField, Range(2, 8)] private int numberOfBlades = 4;
-    [SerializeField] private float bladeLength = 1f;
-    [SerializeField] private float bladeWidth = 0.2f;
-    [SerializeField] private float bladeThickness = 0.05f;
-    [SerializeField] private BladeShape bladeShape = BladeShape.Triangular;
-    [SerializeField, Range(-1f, 1f)] private float bladeCurveAmount = 0.2f; // Negative curves backward, positive curves forward
-    [SerializeField, Range(0f, 3f)] private float petalShape = 1f; // 0 = hourglass, 1 = straight, >1 = petal bulge
-    [SerializeField, Range(-1f, 1f)] private float bladeTwist = 0f; // Twist along blade length: -1 = -180°, 0 = flat, 1 = +180°
+    [SerializeField, Range(2, 8)] public int numberOfBlades = 4;
+    [SerializeField] public float bladeLength = 1f;
+    [SerializeField] public float bladeWidth = 0.2f;
+    [SerializeField] public float bladeThickness = 0.05f;
+    [SerializeField] public BladeShape bladeShape = BladeShape.Triangular;
+    [SerializeField, Range(-1f, 1f)] public float bladeCurveAmount = 0.2f; // Negative curves backward, positive curves forward
+    [SerializeField, Range(0f, 3f)] public float petalShape = 1f; // 0 = hourglass, 1 = straight, >1 = petal bulge
+    [SerializeField, Range(-1f, 1f)] public float bladeTwist = 0f; // Twist along blade length: -1 = -180°, 0 = flat, 1 = +180°
 
     [Header("Hub Settings")]
-    [SerializeField] private float hubRadius = 0.15f;
-    [SerializeField] private float hubHeight = 0.1f;
+    [SerializeField] public float hubRadius = 0.15f;
+    [SerializeField] public float hubHeight = 0.1f;
 
     [Header("Ring Settings")]
-    [SerializeField] private bool includeRing = false;
-    [SerializeField] private float ringThickness = 0.05f;
+    [SerializeField] public bool includeRing = false;
+    [SerializeField] public float ringThickness = 0.05f;
 
     public void GenerateRotor()
     {

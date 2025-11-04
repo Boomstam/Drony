@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2949283044460321112
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8131264722811017714}
+  - component: {fileID: 8583820653846786992}
+  m_Layer: 0
+  m_Name: RandomDronePartGenerator
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8131264722811017714
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2949283044460321112}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 9.56919, y: 0, z: 10.4395}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8583820653846786992
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2949283044460321112}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 38073515185ed304db9b5165de45d67e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  droneHub: {fileID: 0}
+  droneRotor: {fileID: 0}
+  mainSeed: 427149
+  rotorSeed: 745491
+  hubSeed: 446186
+  rotorCount: 6
+  autoGenerateMeshes: 1
+  bladeLengthRange: {x: 0.5, y: 2.5}
+  bladeWidthRange: {x: 0.1, y: 0.4}
+  bladeThicknessRange: {x: 0.02, y: 0.08}
+  hubRadiusRange: {x: 0.08, y: 0.3}
+  hubHeightRange: {x: 0.05, y: 0.2}
+  ringThicknessRange: {x: 0.03, y: 0.12}
+  hubScaleRange: {x: 0.2, y: 1}
+  ringProbability: 0.3

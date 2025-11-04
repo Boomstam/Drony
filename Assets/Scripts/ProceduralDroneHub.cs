@@ -6,14 +6,14 @@ public class ProceduralDroneHub : MonoBehaviour
     [SerializeField] private MeshFilter meshFilter;
 
     [Header("Hub Base Shape")]
-    [SerializeField] private BaseShape baseShape = BaseShape.Sphere;
-    [SerializeField] private Vector3 scale = new Vector3(0.5f, 0.5f, 0.5f); // XYZ independent scaling
+    [SerializeField] public BaseShape baseShape = BaseShape.Sphere;
+    [SerializeField] public Vector3 scale = new Vector3(0.5f, 0.5f, 0.5f); // XYZ independent scaling
 
     private const int SPHERE_SEGMENTS = 24; // Hidden resolution parameter
 
     [Header("Deformation")]
-    [SerializeField, Range(0f, 1f)] private float taper = 0f; // 0 = no taper, 1 = extreme narrowing
-    [SerializeField] private TaperDirection taperDirection = TaperDirection.BottomToTop;
+    [SerializeField, Range(0f, 1f)] public float taper = 0f; // 0 = no taper, 1 = extreme narrowing
+    [SerializeField] public TaperDirection taperDirection = TaperDirection.BottomToTop;
 
     public enum BaseShape
     {
