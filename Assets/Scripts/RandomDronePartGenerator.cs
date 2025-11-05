@@ -64,6 +64,13 @@ public class RandomDronePartGenerator : MonoBehaviour
         hubSeed = Random.Range(0, 1000000);
         armSeed = Random.Range(0, 1000000);
         
+        // CRITICAL: Determine rotor count BEFORE creating components
+        Random.InitState(mainSeed);
+        float rand = Random.value;
+        if (rand < 0.33f) rotorCount = 4;
+        else if (rand < 0.66f) rotorCount = 6;
+        else rotorCount = 8;
+        
         EnsureComponentsExist();
         
         Random.InitState(hubSeed);
@@ -185,10 +192,8 @@ public class RandomDronePartGenerator : MonoBehaviour
     {
         Random.InitState(seed);
         
-        float rand = Random.value;
-        if (rand < 0.33f) rotorCount = 4;
-        else if (rand < 0.66f) rotorCount = 6;
-        else rotorCount = 8;
+        // Note: rotorCount is now set BEFORE this method is called (in RandomizeAll)
+        // This ensures EnsureComponentsExist() creates the correct number of rotors
 
         float hubMaxDimension = 0.5f;
         float rotorTotalReach = 1.0f;
@@ -264,24 +269,42 @@ public class RandomDronePartGenerator : MonoBehaviour
         currentTiltAngle = Mathf.Lerp(rotorTiltAngleRange.x, rotorTiltAngleRange.y, Random.value);
 
         Debug.Log($"[Layout] Final rotor distance: {currentRotorDistance}, Vertical offset: {currentVerticalOffset}, Tilt angle: {currentTiltAngle}");
-        Debug.Log($"[Layout] Rotor count: {rotorCount}");
+        Debug.Log($"[Layout] Rotor count: {rotorCount}, Generated rotors: {generatedRotors.Count}");
 
+        // Safety check: Ensure we have the right number of rotors
+        if (generatedRotors.Count != rotorCount)
+        {
+            Debug.LogWarning($"[Layout] Mismatch! Expected {rotorCount} rotors but have {generatedRotors.Count}. This should not happen!");
+        }
+
+        // Position all active rotors in a symmetric circle
         // angleStep already calculated above for distance calculation
-        for (int i = 0; i < generatedRotors.Count && i < rotorCount; i++)
+        for (int i = 0; i < generatedRotors.Count; i++)
         {
             if (generatedRotors[i] != null)
             {
-                float angle = i * angleStep * Mathf.Deg2Rad;
-                Vector3 position = new Vector3(
-                    Mathf.Cos(angle) * currentRotorDistance,
-                    currentVerticalOffset,
-                    Mathf.Sin(angle) * currentRotorDistance
-                );
-                
-                generatedRotors[i].transform.localPosition = position;
-                generatedRotors[i].transform.localRotation = Quaternion.Euler(currentTiltAngle, 0, 0);
-                
-                Debug.Log($"[Layout] Rotor {i}: Angle={angle * Mathf.Rad2Deg}°, Position={position}, Distance from center={position.magnitude}");
+                if (i < rotorCount)
+                {
+                    // Position active rotors
+                    float angle = i * angleStep * Mathf.Deg2Rad;
+                    Vector3 position = new Vector3(
+                        Mathf.Cos(angle) * currentRotorDistance,
+                        currentVerticalOffset,
+                        Mathf.Sin(angle) * currentRotorDistance
+                    );
+                    
+                    generatedRotors[i].transform.localPosition = position;
+                    generatedRotors[i].transform.localRotation = Quaternion.Euler(currentTiltAngle, 0, 0);
+                    generatedRotors[i].gameObject.SetActive(true);
+                    
+                    Debug.Log($"[Layout] Rotor {i}: Angle={angle * Mathf.Rad2Deg:F1}°, Position=({position.x:F2}, {position.y:F2}, {position.z:F2}), Distance from center={position.magnitude:F2}");
+                }
+                else
+                {
+                    // Deactivate extra rotors (shouldn't happen with the fix, but safety check)
+                    generatedRotors[i].gameObject.SetActive(false);
+                    Debug.Log($"[Layout] Rotor {i}: Deactivated (extra)");
+                }
             }
         }
         
