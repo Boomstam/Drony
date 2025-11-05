@@ -143,22 +143,10 @@ public class RandomDronePartGenerator : MonoBehaviour
         // Create new hub instance
         if (droneHubPrefab != null)
         {
-            GameObject hubObj = new GameObject("GeneratedHub");
-            hubObj.transform.SetParent(transform);
-            hubObj.transform.localPosition = Vector3.zero;
-            hubObj.transform.localRotation = Quaternion.identity;
-            
-            MeshFilter hubMF = hubObj.AddComponent<MeshFilter>();
-            MeshRenderer hubMR = hubObj.AddComponent<MeshRenderer>();
-            generatedHub = hubObj.AddComponent<ProceduralDroneHub>();
-            
-            MeshRenderer prefabMR = droneHubPrefab.GetComponent<MeshRenderer>();
-            if (prefabMR != null && prefabMR.sharedMaterial != null)
-            {
-                hubMR.sharedMaterial = prefabMR.sharedMaterial;
-            }
-            
-            generatedHub.meshFilter = hubMF;
+            generatedHub = Instantiate(droneHubPrefab, transform);
+            generatedHub.gameObject.name = "GeneratedHub";
+            generatedHub.transform.localPosition = Vector3.zero;
+            generatedHub.transform.localRotation = Quaternion.identity;
         }
 
         // Create rotor instances
@@ -166,22 +154,10 @@ public class RandomDronePartGenerator : MonoBehaviour
         {
             for (int i = 0; i < rotorCount; i++)
             {
-                GameObject rotorObj = new GameObject($"GeneratedRotor_{i}");
-                rotorObj.transform.SetParent(transform);
-                rotorObj.transform.localPosition = Vector3.zero;
-                rotorObj.transform.localRotation = Quaternion.identity;
-                
-                MeshFilter rotorMF = rotorObj.AddComponent<MeshFilter>();
-                MeshRenderer rotorMR = rotorObj.AddComponent<MeshRenderer>();
-                ProceduralRotor rotor = rotorObj.AddComponent<ProceduralRotor>();
-                
-                MeshRenderer prefabMR = droneRotorPrefab.GetComponent<MeshRenderer>();
-                if (prefabMR != null && prefabMR.sharedMaterial != null)
-                {
-                    rotorMR.sharedMaterial = prefabMR.sharedMaterial;
-                }
-                
-                rotor.meshFilter = rotorMF;
+                ProceduralRotor rotor = Instantiate(droneRotorPrefab, transform);
+                rotor.gameObject.name = $"GeneratedRotor_{i}";
+                rotor.transform.localPosition = Vector3.zero;
+                rotor.transform.localRotation = Quaternion.identity;
                 
                 generatedRotors.Add(rotor);
             }

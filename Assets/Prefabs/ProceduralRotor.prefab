@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 8305466247735928337}
   - component: {fileID: 7961866867995517976}
   - component: {fileID: 7780367476764930815}
+  - component: {fileID: 4890661491618672715}
   m_Layer: 0
   m_Name: ProceduralRotor
   m_TagString: Untagged
@@ -51,10 +52,13 @@ MonoBehaviour:
   bladeLength: 1
   bladeWidth: 0.2
   bladeThickness: 0.05
+  bladeShape: 0
+  bladeCurveAmount: 0.2
+  petalShape: 1
+  bladeTwist: 0
   hubRadius: 0.15
   hubHeight: 0.1
   includeRing: 0
-  ringRadius: 1.2
   ringThickness: 0.05
 --- !u!33 &7961866867995517976
 MeshFilter:
@@ -109,3 +113,18 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &4890661491618672715
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1759955158220864840}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c78c2ad976826514f82fe47d3aa6c4c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  rpm: 1000
+  rotationAxis: {x: 0, y: 1, z: 0}
+  rotateInEditor: 0
