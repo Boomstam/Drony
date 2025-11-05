@@ -7,18 +7,18 @@ using UnityEditor;
 public class RandomDronePartGenerator : MonoBehaviour
 {
     [Header("Component References")]
-    [SerializeField] private ProceduralDroneHub droneHubPrefab;
+    [SerializeField] private ProceduralDroneBody droneBodyPrefab;
     [SerializeField] private ProceduralRotor droneRotorPrefab;
 
     [Header("Generated Instances (Do Not Assign)")]
-    private ProceduralDroneHub generatedHub;
+    private ProceduralDroneBody generatedBody;
     private List<ProceduralRotor> generatedRotors = new List<ProceduralRotor>();
     private List<GameObject> generatedArms = new List<GameObject>();
 
     [Header("Seeds")]
     [SerializeField] private int mainSeed = 42;
     [SerializeField] private int rotorSeed = 100;
-    [SerializeField] private int hubSeed = 200;
+    [SerializeField] private int bodySeed = 200;
     [SerializeField] private int armSeed = 300;
 
     [Header("Layout Parameters")]
@@ -40,10 +40,10 @@ public class RandomDronePartGenerator : MonoBehaviour
     [SerializeField] private Vector2 bladeLengthRange = new Vector2(0.5f, 2.5f);
     [SerializeField] private Vector2 bladeWidthRange = new Vector2(0.1f, 0.4f);
     [SerializeField] private Vector2 bladeThicknessRange = new Vector2(0.02f, 0.08f);
-    [SerializeField] private Vector2 hubRadiusRange = new Vector2(0.08f, 0.3f);
-    [SerializeField] private Vector2 hubHeightRange = new Vector2(0.05f, 0.2f);
+    [SerializeField] private Vector2 rotorHubRadiusRange = new Vector2(0.08f, 0.3f);
+    [SerializeField] private Vector2 rotorHubHeightRange = new Vector2(0.05f, 0.2f);
     [SerializeField] private Vector2 ringThicknessRange = new Vector2(0.03f, 0.12f);
-    [SerializeField] private Vector2 hubScaleRange = new Vector2(0.2f, 1.0f);
+    [SerializeField] private Vector2 bodyScaleRange = new Vector2(0.2f, 1.0f);
     [SerializeField, Range(0f, 1f)] private float ringProbability = 0.3f;
 
     // Current randomized layout values
@@ -61,7 +61,7 @@ public class RandomDronePartGenerator : MonoBehaviour
     {
         mainSeed = Random.Range(0, 1000000);
         rotorSeed = Random.Range(0, 1000000);
-        hubSeed = Random.Range(0, 1000000);
+        bodySeed = Random.Range(0, 1000000);
         armSeed = Random.Range(0, 1000000);
         
         // CRITICAL: Determine rotor count BEFORE creating components
@@ -73,8 +73,8 @@ public class RandomDronePartGenerator : MonoBehaviour
         
         EnsureComponentsExist();
         
-        Random.InitState(hubSeed);
-        RandomizeHubInternal();
+        Random.InitState(bodySeed);
+        RandomizeBodyInternal();
         
         Random.InitState(rotorSeed);
         RandomizeRotorInternal();
@@ -94,7 +94,7 @@ public class RandomDronePartGenerator : MonoBehaviour
         EditorUtility.SetDirty(this);
         #endif
         
-        Debug.Log($"Randomized all | mainSeed: {mainSeed} | rotorSeed: {rotorSeed} | hubSeed: {hubSeed} | armSeed: {armSeed}");
+        Debug.Log($"Randomized all | mainSeed: {mainSeed} | rotorSeed: {rotorSeed} | bodySeed: {bodySeed} | armSeed: {armSeed}");
     }
 
     public void RandomizeLayout()
@@ -116,10 +116,10 @@ public class RandomDronePartGenerator : MonoBehaviour
     private void EnsureComponentsExist()
     {
         // Delete old instances
-        if (generatedHub != null)
+        if (generatedBody != null)
         {
-            DestroyImmediate(generatedHub.gameObject);
-            generatedHub = null;
+            DestroyImmediate(generatedBody.gameObject);
+            generatedBody = null;
         }
         
         foreach (var rotor in generatedRotors)
@@ -141,12 +141,13 @@ public class RandomDronePartGenerator : MonoBehaviour
         generatedArms.Clear();
 
         // Create new hub instance
-        if (droneHubPrefab != null)
+        if (droneBodyPrefab != null)
         {
-            generatedHub = Instantiate(droneHubPrefab, transform);
-            generatedHub.gameObject.name = "GeneratedHub";
-            generatedHub.transform.localPosition = Vector3.zero;
-            generatedHub.transform.localRotation = Quaternion.identity;
+            generatedBody = Instantiate(droneBodyPrefab, transform);
+            generatedBody.gameObject.name = "GeneratedBody";
+            generatedBody.gameObject.SetActive(true);
+            generatedBody.transform.localPosition = Vector3.zero;
+            generatedBody.transform.localRotation = Quaternion.identity;
         }
 
         // Create rotor instances
@@ -174,9 +175,9 @@ public class RandomDronePartGenerator : MonoBehaviour
         float hubMaxDimension = 0.5f;
         float rotorTotalReach = 1.0f;
         
-        if (generatedHub != null)
+        if (generatedBody != null)
         {
-            hubMaxDimension = Mathf.Max(generatedHub.scale.x, generatedHub.scale.y, generatedHub.scale.z);
+            hubMaxDimension = Mathf.Max(generatedBody.scale.x, generatedBody.scale.y, generatedBody.scale.z);
             Debug.Log($"[Layout] Hub max dimension: {hubMaxDimension}");
         }
         
@@ -325,8 +326,19 @@ public class RandomDronePartGenerator : MonoBehaviour
         float petalShape = Mathf.Lerp(0f, 3f, Random.value);
         float bladeTwist = Random.Range(-1f, 1f);
 
-        float hubRadius = Mathf.Lerp(hubRadiusRange.x, hubRadiusRange.y, Random.value);
-        float hubHeight = Mathf.Lerp(hubHeightRange.x, hubHeightRange.y, Random.value);
+        // Calculate minimum hub radius based on the hub's scale to prevent intersection
+        float minHubRadius = rotorHubRadiusRange.x;
+        if (generatedBody != null)
+        {
+            // Hub radius must be at least as large as the hub's maximum scale dimension
+            // Add a small buffer (5%) to ensure clean separation
+            float hubMaxScale = Mathf.Max(generatedBody.scale.x, generatedBody.scale.y, generatedBody.scale.z);
+            minHubRadius = Mathf.Max(minHubRadius, hubMaxScale * 1.05f);
+        }
+
+        // Ensure hub radius respects the minimum calculated from hub scale
+        float hubRadius = Mathf.Lerp(minHubRadius, Mathf.Max(minHubRadius, rotorHubRadiusRange.y), Random.value);
+        float hubHeight = Mathf.Lerp(rotorHubHeightRange.x, rotorHubHeightRange.y, Random.value);
 
         bool includeRing = Random.value < ringProbability;
         float ringThickness = includeRing ? Mathf.Lerp(ringThicknessRange.x, ringThicknessRange.y, Random.value) : 0.05f;
@@ -352,17 +364,17 @@ public class RandomDronePartGenerator : MonoBehaviour
         }
     }
 
-    public void RandomizeHub()
+    public void RandomizeBody()
     {
-        if (generatedHub == null)
+        if (generatedBody == null)
         {
             Debug.LogError("No hub exists! Use Randomize All first.");
             return;
         }
 
-        hubSeed = Random.Range(0, 1000000);
-        Random.InitState(hubSeed);
-        RandomizeHubInternal();
+        bodySeed = Random.Range(0, 1000000);
+        Random.InitState(bodySeed);
+        RandomizeBodyInternal();
         
         if (generateArms)
         {
@@ -373,23 +385,23 @@ public class RandomDronePartGenerator : MonoBehaviour
         EditorUtility.SetDirty(this);
         #endif
         
-        Debug.Log($"Randomized hub with seed: {hubSeed}");
+        Debug.Log($"Randomized hub with seed: {bodySeed}");
     }
 
-    private void RandomizeHubInternal()
+    private void RandomizeBodyInternal()
     {
-        generatedHub.baseShape = (ProceduralDroneHub.BaseShape)Random.Range(0, 2);
+        generatedBody.baseShape = (ProceduralDroneBody.BaseShape)Random.Range(0, 2);
 
-        generatedHub.scale = new Vector3(
-            Mathf.Lerp(hubScaleRange.x, hubScaleRange.y, Random.value),
-            Mathf.Lerp(hubScaleRange.x, hubScaleRange.y, Random.value),
-            Mathf.Lerp(hubScaleRange.x, hubScaleRange.y, Random.value)
+        generatedBody.scale = new Vector3(
+            Mathf.Lerp(bodyScaleRange.x, bodyScaleRange.y, Random.value),
+            Mathf.Lerp(bodyScaleRange.x, bodyScaleRange.y, Random.value),
+            Mathf.Lerp(bodyScaleRange.x, bodyScaleRange.y, Random.value)
         );
 
-        generatedHub.taper = Random.value;
-        generatedHub.taperDirection = (ProceduralDroneHub.TaperDirection)Random.Range(0, 2);
+        generatedBody.taper = Random.value;
+        generatedBody.taperDirection = (ProceduralDroneBody.TaperDirection)Random.Range(0, 2);
 
-        generatedHub.GenerateHub();
+        generatedBody.GenerateBody();
     }
 
     private void RandomizeArmsInternal()
@@ -404,10 +416,10 @@ public class RandomDronePartGenerator : MonoBehaviour
 
     public void DeleteCurrentDrone()
     {
-        if (generatedHub != null)
+        if (generatedBody != null)
         {
-            DestroyImmediate(generatedHub.gameObject);
-            generatedHub = null;
+            DestroyImmediate(generatedBody.gameObject);
+            generatedBody = null;
         }
 
         foreach (var rotor in generatedRotors)
@@ -445,7 +457,7 @@ public class RandomDronePartGenerator : MonoBehaviour
         }
         generatedArms.Clear();
 
-        if (generatedHub == null || generatedRotors.Count == 0)
+        if (generatedBody == null || generatedRotors.Count == 0)
         {
             return;
         }
@@ -490,9 +502,9 @@ public class RandomDronePartGenerator : MonoBehaviour
         MeshRenderer mr = armObj.AddComponent<MeshRenderer>();
 
         // Copy material from hub
-        if (generatedHub != null)
+        if (generatedBody != null)
         {
-            MeshRenderer hubMR = generatedHub.GetComponent<MeshRenderer>();
+            MeshRenderer hubMR = generatedBody.GetComponent<MeshRenderer>();
             if (hubMR != null && hubMR.sharedMaterial != null)
             {
                 mr.sharedMaterial = hubMR.sharedMaterial;
@@ -520,22 +532,22 @@ public class RandomDronePartGenerator : MonoBehaviour
 
     private Vector3 GetHubSurfacePoint(Vector3 direction)
     {
-        if (generatedHub == null) return Vector3.zero;
+        if (generatedBody == null) return Vector3.zero;
 
         direction.Normalize();
         
         // Approximate surface point based on hub shape and scale
         Vector3 scaledDirection = direction;
-        scaledDirection.x *= generatedHub.scale.x;
-        scaledDirection.y *= generatedHub.scale.y;
-        scaledDirection.z *= generatedHub.scale.z;
+        scaledDirection.x *= generatedBody.scale.x;
+        scaledDirection.y *= generatedBody.scale.y;
+        scaledDirection.z *= generatedBody.scale.z;
 
         // Apply taper adjustment
-        if (generatedHub.taper > 0f)
+        if (generatedBody.taper > 0f)
         {
-            if (generatedHub.taperDirection == ProceduralDroneHub.TaperDirection.BottomToTop)
+            if (generatedBody.taperDirection == ProceduralDroneBody.TaperDirection.BottomToTop)
             {
-                float taperFactor = 1f - generatedHub.taper * 0.5f;
+                float taperFactor = 1f - generatedBody.taper * 0.5f;
                 scaledDirection.x *= taperFactor;
                 scaledDirection.z *= taperFactor;
             }

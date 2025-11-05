@@ -44,18 +44,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 38073515185ed304db9b5165de45d67e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  droneHub: {fileID: 0}
-  droneRotor: {fileID: 0}
-  mainSeed: 427149
-  rotorSeed: 745491
-  hubSeed: 446186
-  rotorCount: 6
-  autoGenerateMeshes: 1
+  droneHubPrefab: {fileID: 0}
+  droneRotorPrefab: {fileID: 0}
+  mainSeed: 981793
+  rotorSeed: 58888
+  hubSeed: 282680
+  armSeed: 827890
+  rotorCount: 8
+  rotorDistanceRange: {x: 1.5, y: 3}
+  rotorVerticalOffsetRange: {x: -0.3, y: 0.3}
+  rotorTiltAngleRange: {x: -15, y: 15}
+  generateArms: 1
+  armShape: 1
+  armThicknessRange: {x: 0.03, y: 0.1}
+  autoScaleArmThickness: 1
+  armThicknessScale: 0.5
+  armSegments: 12
+  ringClearance: 0.15
   bladeLengthRange: {x: 0.5, y: 2.5}
   bladeWidthRange: {x: 0.1, y: 0.4}
   bladeThicknessRange: {x: 0.02, y: 0.08}
-  hubRadiusRange: {x: 0.08, y: 0.3}
-  hubHeightRange: {x: 0.05, y: 0.2}
+  hubRadiusRange: {x: 0.15, y: 0.45}
+  hubHeightRange: {x: 0.1, y: 0.3}
   ringThicknessRange: {x: 0.03, y: 0.12}
-  hubScaleRange: {x: 0.2, y: 1}
+  hubScaleRange: {x: 0.3, y: 1.2}
   ringProbability: 0.3

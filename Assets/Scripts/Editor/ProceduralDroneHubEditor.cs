@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEditor;
 
-[CustomEditor(typeof(ProceduralDroneHub))]
-public class ProceduralDroneHubEditor : Editor
+[CustomEditor(typeof(ProceduralDroneBody))]
+public class ProceduralDroneBodyEditor : Editor
 {
     public override void OnInspectorGUI()
     {
@@ -10,11 +10,11 @@ public class ProceduralDroneHubEditor : Editor
 
         EditorGUILayout.Space();
         
-        ProceduralDroneHub hub = (ProceduralDroneHub)target;
+        ProceduralDroneBody body = (ProceduralDroneBody)target;
 
-        if (GUILayout.Button("Generate Hub", GUILayout.Height(40)))
+        if (GUILayout.Button("Generate Body", GUILayout.Height(40)))
         {
-            hub.GenerateHub();
+            body.GenerateBody();
         }
     }
 }

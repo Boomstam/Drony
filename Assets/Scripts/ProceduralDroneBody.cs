@@ -1,11 +1,11 @@
 using UnityEngine;
 
-public class ProceduralDroneHub : MonoBehaviour
+public class ProceduralDroneBody : MonoBehaviour
 {
     [Header("Mesh Reference")]
     [SerializeField] public MeshFilter meshFilter;
 
-    [Header("Hub Base Shape")]
+    [Header("Body Base Shape")]
     [SerializeField] public BaseShape baseShape = BaseShape.Sphere;
     [SerializeField] public Vector3 scale = new Vector3(0.5f, 0.5f, 0.5f); // XYZ independent scaling
 
@@ -27,7 +27,7 @@ public class ProceduralDroneHub : MonoBehaviour
         BackToFront     // Narrows from back (X-) to front (X+)
     }
 
-    public void GenerateHub()
+    public void GenerateBody()
     {
         if (meshFilter == null)
         {
@@ -36,7 +36,7 @@ public class ProceduralDroneHub : MonoBehaviour
         }
 
         Mesh mesh = baseShape == BaseShape.Sphere ? GenerateSphereMesh() : GenerateCubeMesh();
-        mesh.name = "Procedural Drone Hub";
+        mesh.name = "Procedural Drone Body";
 
         meshFilter.mesh = mesh;
     }
