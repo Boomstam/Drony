@@ -191,26 +191,82 @@ public class RandomDronePartGenerator : MonoBehaviour
         else rotorCount = 8;
 
         float hubMaxDimension = 0.5f;
-        float rotorMaxLength = 1.0f;
+        float rotorTotalReach = 1.0f;
         
         if (generatedHub != null)
         {
             hubMaxDimension = Mathf.Max(generatedHub.scale.x, generatedHub.scale.y, generatedHub.scale.z);
+            Debug.Log($"[Layout] Hub max dimension: {hubMaxDimension}");
         }
         
         if (generatedRotors.Count > 0 && generatedRotors[0] != null)
         {
-            rotorMaxLength = generatedRotors[0].bladeLength + generatedRotors[0].hubRadius;
+            ProceduralRotor rotor = generatedRotors[0];
+            
+            Debug.Log($"[Layout] Rotor properties - Hub Radius: {rotor.hubRadius}, Blade Length: {rotor.bladeLength}, Blade Width: {rotor.bladeWidth}, Include Ring: {rotor.includeRing}, Ring Thickness: {rotor.ringThickness}");
+            
+            // Calculate total rotor reach including:
+            // - Hub radius
+            // - Blade length
+            // - Ring thickness (if ring is enabled)
+            // - Blade width (extends perpendicular, but needs buffer)
+            float bladeReach = rotor.hubRadius + rotor.bladeLength;
+            Debug.Log($"[Layout] Blade reach (hub + length): {bladeReach}");
+            
+            float ringReach = rotor.includeRing ? (bladeReach * 1.1f + rotor.ringThickness) : bladeReach;
+            Debug.Log($"[Layout] Ring reach: {ringReach}");
+            
+            // Add blade width as additional buffer since blades can stick out at angles
+            rotorTotalReach = ringReach + rotor.bladeWidth * 0.5f;
+            Debug.Log($"[Layout] Total rotor reach (with blade width buffer): {rotorTotalReach}");
         }
 
-        float minSafeDistance = (hubMaxDimension * 0.5f) + rotorMaxLength + 0.5f;
-        float actualMinDistance = Mathf.Max(rotorDistanceRange.x, minSafeDistance);
+        // Calculate minimum safe distance based on rotor count and rotor-to-rotor spacing
+        // For N rotors arranged in a circle, adjacent rotors are (360/N) degrees apart
+        // Using law of cosines: distance between adjacent rotor centers = 2 * R * sin(angle/2)
+        // We need: 2 * R * sin(angle/2) >= 2 * rotorTotalReach + safetyBuffer
+        // Therefore: R >= (2 * rotorTotalReach + safetyBuffer) / (2 * sin(angle/2))
         
-        currentRotorDistance = Mathf.Lerp(actualMinDistance, rotorDistanceRange.y, Random.value);
+        float angleStep = 360f / rotorCount;
+        float angleBetweenRotors = angleStep * Mathf.Deg2Rad;
+        float halfAngle = angleBetweenRotors / 2f;
+        
+        // Minimum distance between adjacent rotor centers needed to prevent intersection
+        float minRotorToRotorDistance = 2f * rotorTotalReach + 0.4f; // 0.4 is safety buffer between rotors
+        
+        // Calculate required radius from center to achieve this rotor-to-rotor distance
+        float minRadiusForRotorSpacing = minRotorToRotorDistance / (2f * Mathf.Sin(halfAngle));
+        Debug.Log($"[Layout] Rotor count: {rotorCount}, Angle between: {angleStep}°, Min rotor-to-rotor distance: {minRotorToRotorDistance}, Required radius: {minRadiusForRotorSpacing}");
+        
+        // Also ensure rotors clear the hub
+        float minRadiusForHubClearance = (hubMaxDimension * 0.5f) + rotorTotalReach + 0.3f;
+        Debug.Log($"[Layout] Min radius for hub clearance: {minRadiusForHubClearance}");
+        
+        // Use the larger of the two requirements
+        float minSafeDistance = Mathf.Max(minRadiusForRotorSpacing, minRadiusForHubClearance);
+        Debug.Log($"[Layout] Calculated min safe distance: {minSafeDistance}");
+        
+        float actualMinDistance = Mathf.Max(rotorDistanceRange.x, minSafeDistance);
+        Debug.Log($"[Layout] Actual min distance after range check: {actualMinDistance} (range min: {rotorDistanceRange.x}, range max: {rotorDistanceRange.y})");
+        
+        float randomValue = Random.value;
+        Debug.Log($"[Layout] Random value for distance lerp: {randomValue}, Lerp range: [{actualMinDistance}, {rotorDistanceRange.y}]");
+        
+        // CRITICAL FIX: If calculated minimum is greater than range maximum, use the minimum
+        float effectiveMax = Mathf.Max(actualMinDistance, rotorDistanceRange.y);
+        if (effectiveMax > rotorDistanceRange.y)
+        {
+            Debug.LogWarning($"[Layout] Calculated min distance ({actualMinDistance}) exceeds range max ({rotorDistanceRange.y})! Using min as the distance.");
+        }
+        
+        currentRotorDistance = Mathf.Lerp(actualMinDistance, effectiveMax, randomValue);
         currentVerticalOffset = Mathf.Lerp(rotorVerticalOffsetRange.x, rotorVerticalOffsetRange.y, Random.value);
         currentTiltAngle = Mathf.Lerp(rotorTiltAngleRange.x, rotorTiltAngleRange.y, Random.value);
 
-        float angleStep = 360f / rotorCount;
+        Debug.Log($"[Layout] Final rotor distance: {currentRotorDistance}, Vertical offset: {currentVerticalOffset}, Tilt angle: {currentTiltAngle}");
+        Debug.Log($"[Layout] Rotor count: {rotorCount}");
+
+        // angleStep already calculated above for distance calculation
         for (int i = 0; i < generatedRotors.Count && i < rotorCount; i++)
         {
             if (generatedRotors[i] != null)
@@ -224,6 +280,8 @@ public class RandomDronePartGenerator : MonoBehaviour
                 
                 generatedRotors[i].transform.localPosition = position;
                 generatedRotors[i].transform.localRotation = Quaternion.Euler(currentTiltAngle, 0, 0);
+                
+                Debug.Log($"[Layout] Rotor {i}: Angle={angle * Mathf.Rad2Deg}°, Position={position}, Distance from center={position.magnitude}");
             }
         }
         
