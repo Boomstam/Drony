@@ -51,8 +51,10 @@
     <Compile Include="Assets\Scripts\RandomDronePartGenerator.cs" />
     <Compile Include="Assets\Scripts\RotorRotationController.cs" />
     <Compile Include="Assets\Scripts\Editor\RotorRotationControllerEditor.cs" />
+    <Compile Include="Assets\Scripts\Editor\ProceduralDroneTextureGeneratorEditor.cs" />
     <Compile Include="Assets\Scripts\Editor\RandomDronePartGeneratorEditor.cs" />
     <Compile Include="Assets\Scripts\Editor\ProceduralDroneHubEditor.cs" />
+    <Compile Include="Assets\Scripts\ProceduralDroneTextureGenerator.cs" />
     <Compile Include="Assets\Scripts\Editor\ProceduralRotorEditor.cs" />
     <None Include="Assets\Scripts\Scripts.asmdef" />
     <Reference Include="UnityEngine">

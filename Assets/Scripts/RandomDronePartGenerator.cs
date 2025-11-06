@@ -9,6 +9,7 @@ public class RandomDronePartGenerator : MonoBehaviour
     [Header("Component References")]
     [SerializeField] private ProceduralDroneBody droneBodyPrefab;
     [SerializeField] private ProceduralRotor droneRotorPrefab;
+    [SerializeField] private ProceduralDroneTextureGenerator textureGenerator;
 
     [Header("Generated Instances (Do Not Assign)")]
     private ProceduralDroneBody generatedBody;
@@ -20,6 +21,7 @@ public class RandomDronePartGenerator : MonoBehaviour
     [SerializeField] private int rotorSeed = 100;
     [SerializeField] private int bodySeed = 200;
     [SerializeField] private int armSeed = 300;
+    [SerializeField] private int textureSeed = 400;
 
     [Header("Layout Parameters")]
     [SerializeField] private int rotorCount = 4; // 4, 6, or 8 rotors
@@ -63,6 +65,7 @@ public class RandomDronePartGenerator : MonoBehaviour
         rotorSeed = Random.Range(0, 1000000);
         bodySeed = Random.Range(0, 1000000);
         armSeed = Random.Range(0, 1000000);
+        textureSeed = Random.Range(0, 1000000);
         
         // CRITICAL: Determine rotor count BEFORE creating components
         Random.InitState(mainSeed);
@@ -90,11 +93,18 @@ public class RandomDronePartGenerator : MonoBehaviour
             GenerateArms();
         }
         
+        // Generate textures AFTER all geometry is created
+        if (textureGenerator != null)
+        {
+            textureGenerator.SetSeed(textureSeed);
+            textureGenerator.GenerateTextures(textureSeed);
+        }
+        
         #if UNITY_EDITOR
         EditorUtility.SetDirty(this);
         #endif
         
-        Debug.Log($"Randomized all | mainSeed: {mainSeed} | rotorSeed: {rotorSeed} | bodySeed: {bodySeed} | armSeed: {armSeed}");
+        Debug.Log($"Randomized all | mainSeed: {mainSeed} | rotorSeed: {rotorSeed} | bodySeed: {bodySeed} | armSeed: {armSeed} | textureSeed: {textureSeed}");
     }
 
     public void RandomizeLayout()
