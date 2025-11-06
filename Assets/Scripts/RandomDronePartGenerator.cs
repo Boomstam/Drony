@@ -430,6 +430,12 @@ public class RandomDronePartGenerator : MonoBehaviour
         }
         generatedArms.Clear();
 
+        // FAILSAFE: Delete any remaining children that weren't tracked
+        while (transform.childCount > 0)
+        {
+            DestroyImmediate(transform.GetChild(0).gameObject);
+        }
+
         Debug.Log("Deleted current drone");
     }
 
