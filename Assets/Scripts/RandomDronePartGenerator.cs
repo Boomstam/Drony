@@ -326,18 +326,8 @@ public class RandomDronePartGenerator : MonoBehaviour
         float petalShape = Mathf.Lerp(0f, 3f, Random.value);
         float bladeTwist = Random.Range(-1f, 1f);
 
-        // Calculate minimum hub radius based on the hub's scale to prevent intersection
-        float minHubRadius = rotorHubRadiusRange.x;
-        if (generatedBody != null)
-        {
-            // Hub radius must be at least as large as the hub's maximum scale dimension
-            // Add a small buffer (5%) to ensure clean separation
-            float hubMaxScale = Mathf.Max(generatedBody.scale.x, generatedBody.scale.y, generatedBody.scale.z);
-            minHubRadius = Mathf.Max(minHubRadius, hubMaxScale * 1.05f);
-        }
-
-        // Ensure hub radius respects the minimum calculated from hub scale
-        float hubRadius = Mathf.Lerp(minHubRadius, Mathf.Max(minHubRadius, rotorHubRadiusRange.y), Random.value);
+        // Randomize rotor hub dimensions
+        float hubRadius = Mathf.Lerp(rotorHubRadiusRange.x, rotorHubRadiusRange.y, Random.value);
         float hubHeight = Mathf.Lerp(rotorHubHeightRange.x, rotorHubHeightRange.y, Random.value);
 
         bool includeRing = Random.value < ringProbability;
