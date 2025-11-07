@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// DJI-style world-space drone movement controller.
-/// Handles keyboard input and translates to world-space movement primitives.
+/// Handles keyboard input or moves toward a target if assigned.
 /// Uses kinematic Rigidbody for physics-friendly movement.
 /// </summary>
 public class DroneMovementController : MonoBehaviour
@@ -24,6 +24,10 @@ public class DroneMovementController : MonoBehaviour
     [SerializeField] private float maxRollTilt = 20f;  // degrees for left/right movement
     [SerializeField] private float tiltSmoothTime = 0.15f;
 
+    [Header("AI / Autopilot")]
+    [SerializeField] private Transform target; // Optional move-to target
+    [SerializeField] private float targetArrivalThreshold = 0.5f;
+
     // Current velocities for smoothing
     private Vector3 currentVelocity = Vector3.zero;
     private Vector3 velocitySmoothing = Vector3.zero;
@@ -37,60 +41,97 @@ public class DroneMovementController : MonoBehaviour
 
     private void Update()
     {
-        // Handle keyboard input each frame
-        HandleKeyboardInput();
+        // If target assigned, move toward it; else handle manual input
+        if (target != null)
+            HandleTargetMovement();
+        else
+            HandleKeyboardInput();
     }
 
     private void FixedUpdate()
     {
-        // Apply movement in physics step
         ApplyMovement();
     }
 
+    /// <summary>
+    /// Manual control via keyboard input.
+    /// </summary>
     private void HandleKeyboardInput()
     {
         Vector3 targetVelocity = Vector3.zero;
 
         // WASD for horizontal world-space movement
-        if (Input.GetKey(KeyCode.W)) targetVelocity += Vector3.forward; // North
-        if (Input.GetKey(KeyCode.S)) targetVelocity += Vector3.back;    // South
-        if (Input.GetKey(KeyCode.A)) targetVelocity += Vector3.left;    // West
-        if (Input.GetKey(KeyCode.D)) targetVelocity += Vector3.right;   // East
+        if (Input.GetKey(KeyCode.W)) targetVelocity += Vector3.forward;
+        if (Input.GetKey(KeyCode.S)) targetVelocity += Vector3.back;
+        if (Input.GetKey(KeyCode.A)) targetVelocity += Vector3.left;
+        if (Input.GetKey(KeyCode.D)) targetVelocity += Vector3.right;
 
-        // Normalize horizontal input to prevent faster diagonal movement
+        // Normalize horizontal input
         Vector3 horizontalInput = new Vector3(targetVelocity.x, 0, targetVelocity.z);
         if (horizontalInput.magnitude > 1f)
-        {
             horizontalInput.Normalize();
-        }
+
         targetVelocity = horizontalInput * horizontalSpeed;
 
-        // Shift/Ctrl for vertical world-space movement
-        if (Input.GetKey(KeyCode.LeftShift)) targetVelocity.y = verticalSpeed;   // Up
-        if (Input.GetKey(KeyCode.LeftControl)) targetVelocity.y = -verticalSpeed; // Down
+        // Shift/Ctrl for vertical movement
+        if (Input.GetKey(KeyCode.LeftShift)) targetVelocity.y = verticalSpeed;
+        if (Input.GetKey(KeyCode.LeftControl)) targetVelocity.y = -verticalSpeed;
 
-        // Smooth velocity changes
-        currentVelocity = Vector3.SmoothDamp(
-            currentVelocity, 
-            targetVelocity, 
-            ref velocitySmoothing, 
-            accelerationTime
-        );
+        // Smooth velocity change
+        currentVelocity = Vector3.SmoothDamp(currentVelocity, targetVelocity, ref velocitySmoothing, accelerationTime);
 
-        // Calculate target tilt based on horizontal input (for visual banking)
+        // Tilt visuals
+        ApplyTiltFromInput(horizontalInput);
+    }
+
+    /// <summary>
+    /// Automatically move toward a target if assigned.
+    /// </summary>
+    private void HandleTargetMovement()
+    {
+        if (target == null) return;
+
+        Vector3 toTarget = target.position - rb.position;
+        float distance = toTarget.magnitude;
+
+        if (distance < targetArrivalThreshold)
+        {
+            Hover();
+            return;
+        }
+
+        Vector3 moveDir = toTarget.normalized;
+        Vector3 desiredVelocity = moveDir * horizontalSpeed;
+
+        // Adjust vertical component separately
+        float verticalDelta = target.position.y - rb.position.y;
+        desiredVelocity.y = Mathf.Clamp(verticalDelta, -1f, 1f) * verticalSpeed;
+
+        // Smooth velocity change
+        currentVelocity = Vector3.SmoothDamp(currentVelocity, desiredVelocity, ref velocitySmoothing, accelerationTime);
+
+        // Rotate to face target (yaw)
+        RotateToWorldFacing(new Vector3(moveDir.x, 0f, moveDir.z));
+
+        // Apply tilt for visuals based on horizontal movement
+        Vector3 horizontalDir = new Vector3(moveDir.x, 0f, moveDir.z);
+        ApplyTiltFromInput(horizontalDir);
+    }
+
+    /// <summary>
+    /// Calculates and smooths visual tilt based on input direction.
+    /// </summary>
+    private void ApplyTiltFromInput(Vector3 horizontalInput)
+    {
         float targetPitch = 0f;
         float targetRoll = 0f;
 
         if (horizontalInput.magnitude > 0.01f)
         {
-            // Forward/backward movement creates pitch
-            targetPitch = -horizontalInput.z * maxPitchTilt; // Negative because forward = nose down
-            
-            // Left/right movement creates roll
-            targetRoll = -horizontalInput.x * maxRollTilt; // Negative for correct banking direction
+            targetPitch = -horizontalInput.z * maxPitchTilt; // Forward/back tilt
+            targetRoll = -horizontalInput.x * maxRollTilt;   // Left/right bank
         }
 
-        // Smooth tilt changes
         currentPitch = Mathf.SmoothDamp(currentPitch, targetPitch, ref pitchVelocity, tiltSmoothTime);
         currentRoll = Mathf.SmoothDamp(currentRoll, targetRoll, ref rollVelocity, tiltSmoothTime);
     }
@@ -101,60 +142,41 @@ public class DroneMovementController : MonoBehaviour
         Vector3 newPosition = rb.position + currentVelocity * Time.fixedDeltaTime;
         rb.MovePosition(newPosition);
 
-        // Handle yaw rotation (Q/E)
+        // Handle yaw (Q/E manual)
         float yawInput = 0f;
-        if (Input.GetKey(KeyCode.Q)) yawInput = -1f; // Rotate left
-        if (Input.GetKey(KeyCode.E)) yawInput = 1f;  // Rotate right
+        if (Input.GetKey(KeyCode.Q)) yawInput = -1f;
+        if (Input.GetKey(KeyCode.E)) yawInput = 1f;
 
-        // Calculate base yaw rotation
         float targetYaw = 0f;
         if (Mathf.Abs(yawInput) > 0.01f)
         {
-            // Smooth yaw rotation
             float targetYawVelocity = yawInput * yawSpeed;
             currentYawVelocity = Mathf.Lerp(currentYawVelocity, targetYawVelocity, Time.fixedDeltaTime / rotationSmoothTime);
             targetYaw = currentYawVelocity * Time.fixedDeltaTime;
         }
         else
         {
-            // Decay yaw velocity when no input
             currentYawVelocity = Mathf.Lerp(currentYawVelocity, 0f, Time.fixedDeltaTime / rotationSmoothTime);
         }
 
-        // Combine yaw with visual tilt (pitch and roll)
-        // Get current yaw angle and add the delta
         Vector3 currentEuler = rb.rotation.eulerAngles;
         float newYaw = currentEuler.y + targetYaw;
 
-        // Apply final rotation: Yaw (around world up) + Pitch (tilt) + Roll (bank)
+        // Combine yaw with tilt
         Quaternion finalRotation = Quaternion.Euler(currentPitch, newYaw, currentRoll);
         rb.MoveRotation(finalRotation);
     }
 
-    #region Movement Primitives (for future AI/scripting use)
+    #region Movement Primitives
 
-    /// <summary>
-    /// Move in a world-space direction at a given speed.
-    /// </summary>
     public void MoveInWorldDirection(Vector3 worldDirection, float speed)
     {
         if (worldDirection.sqrMagnitude > 0.01f)
-        {
             currentVelocity = worldDirection.normalized * speed;
-        }
     }
 
-    /// <summary>
-    /// Set direct world-space velocity.
-    /// </summary>
-    public void SetWorldVelocity(Vector3 velocity)
-    {
-        currentVelocity = velocity;
-    }
+    public void SetWorldVelocity(Vector3 velocity) => currentVelocity = velocity;
 
-    /// <summary>
-    /// Rotate to face a world-space direction.
-    /// </summary>
     public void RotateToWorldFacing(Vector3 worldForward)
     {
         if (worldForward.sqrMagnitude > 0.01f)
@@ -164,28 +186,17 @@ public class DroneMovementController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Set target altitude (world Y position).
-    /// </summary>
     public void SetTargetAltitude(float targetY, float speed)
     {
         float currentY = rb.position.y;
         float direction = Mathf.Sign(targetY - currentY);
-        
-        // Only apply vertical velocity if not at target
+
         if (Mathf.Abs(targetY - currentY) > 0.1f)
-        {
             currentVelocity.y = direction * speed;
-        }
         else
-        {
             currentVelocity.y = 0f;
-        }
     }
 
-    /// <summary>
-    /// Stop all movement.
-    /// </summary>
     public void Hover()
     {
         currentVelocity = Vector3.zero;
@@ -199,20 +210,20 @@ public class DroneMovementController : MonoBehaviour
 
     #endregion
 
-    #region Debug Visualization
-
     private void OnDrawGizmos()
     {
         if (!Application.isPlaying || rb == null) return;
 
-        // Draw velocity vector
         Gizmos.color = Color.green;
         Gizmos.DrawRay(rb.position, currentVelocity);
 
-        // Draw forward direction
         Gizmos.color = Color.blue;
         Gizmos.DrawRay(rb.position, transform.forward * 2f);
-    }
 
-    #endregion
+        if (target != null)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawLine(rb.position, target.position);
+        }
+    }
 }
