@@ -19,10 +19,21 @@ public class DroneMovementController : MonoBehaviour
     [SerializeField] private float accelerationTime = 0.2f;
     [SerializeField] private float rotationSmoothTime = 0.1f;
 
+    [Header("Tilt Settings (Visual Only)")]
+    [SerializeField] private float maxPitchTilt = 25f; // degrees for forward/backward movement
+    [SerializeField] private float maxRollTilt = 20f;  // degrees for left/right movement
+    [SerializeField] private float tiltSmoothTime = 0.15f;
+
     // Current velocities for smoothing
     private Vector3 currentVelocity = Vector3.zero;
     private Vector3 velocitySmoothing = Vector3.zero;
     private float currentYawVelocity = 0f;
+
+    // Current tilt angles for smoothing
+    private float currentPitch = 0f;
+    private float currentRoll = 0f;
+    private float pitchVelocity = 0f;
+    private float rollVelocity = 0f;
 
     private void Update()
     {
@@ -65,6 +76,23 @@ public class DroneMovementController : MonoBehaviour
             ref velocitySmoothing, 
             accelerationTime
         );
+
+        // Calculate target tilt based on horizontal input (for visual banking)
+        float targetPitch = 0f;
+        float targetRoll = 0f;
+
+        if (horizontalInput.magnitude > 0.01f)
+        {
+            // Forward/backward movement creates pitch
+            targetPitch = -horizontalInput.z * maxPitchTilt; // Negative because forward = nose down
+            
+            // Left/right movement creates roll
+            targetRoll = -horizontalInput.x * maxRollTilt; // Negative for correct banking direction
+        }
+
+        // Smooth tilt changes
+        currentPitch = Mathf.SmoothDamp(currentPitch, targetPitch, ref pitchVelocity, tiltSmoothTime);
+        currentRoll = Mathf.SmoothDamp(currentRoll, targetRoll, ref rollVelocity, tiltSmoothTime);
     }
 
     private void ApplyMovement()
@@ -78,22 +106,29 @@ public class DroneMovementController : MonoBehaviour
         if (Input.GetKey(KeyCode.Q)) yawInput = -1f; // Rotate left
         if (Input.GetKey(KeyCode.E)) yawInput = 1f;  // Rotate right
 
+        // Calculate base yaw rotation
+        float targetYaw = 0f;
         if (Mathf.Abs(yawInput) > 0.01f)
         {
             // Smooth yaw rotation
             float targetYawVelocity = yawInput * yawSpeed;
             currentYawVelocity = Mathf.Lerp(currentYawVelocity, targetYawVelocity, Time.fixedDeltaTime / rotationSmoothTime);
-            
-            // Apply rotation around world up axis
-            Quaternion deltaRotation = Quaternion.Euler(0f, currentYawVelocity * Time.fixedDeltaTime, 0f);
-            Quaternion newRotation = rb.rotation * deltaRotation;
-            rb.MoveRotation(newRotation);
+            targetYaw = currentYawVelocity * Time.fixedDeltaTime;
         }
         else
         {
             // Decay yaw velocity when no input
             currentYawVelocity = Mathf.Lerp(currentYawVelocity, 0f, Time.fixedDeltaTime / rotationSmoothTime);
         }
+
+        // Combine yaw with visual tilt (pitch and roll)
+        // Get current yaw angle and add the delta
+        Vector3 currentEuler = rb.rotation.eulerAngles;
+        float newYaw = currentEuler.y + targetYaw;
+
+        // Apply final rotation: Yaw (around world up) + Pitch (tilt) + Roll (bank)
+        Quaternion finalRotation = Quaternion.Euler(currentPitch, newYaw, currentRoll);
+        rb.MoveRotation(finalRotation);
     }
 
     #region Movement Primitives (for future AI/scripting use)
@@ -156,6 +191,10 @@ public class DroneMovementController : MonoBehaviour
         currentVelocity = Vector3.zero;
         velocitySmoothing = Vector3.zero;
         currentYawVelocity = 0f;
+        currentPitch = 0f;
+        currentRoll = 0f;
+        pitchVelocity = 0f;
+        rollVelocity = 0f;
     }
 
     #endregion
