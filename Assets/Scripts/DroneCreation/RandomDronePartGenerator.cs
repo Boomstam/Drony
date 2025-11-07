@@ -10,8 +10,10 @@ public class RandomDronePartGenerator : MonoBehaviour
     [SerializeField] private ProceduralDroneBody droneBodyPrefab;
     [SerializeField] private ProceduralRotor droneRotorPrefab;
     [SerializeField] private ProceduralDroneTextureGenerator textureGenerator;
-
+    [SerializeField] private DroneMovementController dronePrefab;
+    
     [Header("Generated Instances (Do Not Assign)")]
+    private DroneMovementController droneContainer;
     private ProceduralDroneBody generatedBody;
     private List<ProceduralRotor> generatedRotors = new List<ProceduralRotor>();
     private List<GameObject> generatedArms = new List<GameObject>();
@@ -125,35 +127,28 @@ public class RandomDronePartGenerator : MonoBehaviour
 
     private void EnsureComponentsExist()
     {
-        // Delete old instances
-        if (generatedBody != null)
+        // Delete old drone container and everything in it
+        if (droneContainer != null)
         {
-            DestroyImmediate(generatedBody.gameObject);
-            generatedBody = null;
+            DestroyImmediate(droneContainer);
+            droneContainer = null;
         }
         
-        foreach (var rotor in generatedRotors)
-        {
-            if (rotor != null)
-            {
-                DestroyImmediate(rotor.gameObject);
-            }
-        }
+        // Clear references
+        generatedBody = null;
         generatedRotors.Clear();
-
-        foreach (var arm in generatedArms)
-        {
-            if (arm != null)
-            {
-                DestroyImmediate(arm);
-            }
-        }
         generatedArms.Clear();
+
+        // Create new drone container GameObject
+        droneContainer = Instantiate(dronePrefab);
+        droneContainer.transform.SetParent(transform);
+        droneContainer.transform.localPosition = Vector3.zero;
+        droneContainer.transform.localRotation = Quaternion.identity;
 
         // Create new hub instance
         if (droneBodyPrefab != null)
         {
-            generatedBody = Instantiate(droneBodyPrefab, transform);
+            generatedBody = Instantiate(droneBodyPrefab, droneContainer.transform);
             generatedBody.gameObject.name = "GeneratedBody";
             generatedBody.gameObject.SetActive(true);
             generatedBody.transform.localPosition = Vector3.zero;
@@ -165,7 +160,7 @@ public class RandomDronePartGenerator : MonoBehaviour
         {
             for (int i = 0; i < rotorCount; i++)
             {
-                ProceduralRotor rotor = Instantiate(droneRotorPrefab, transform);
+                ProceduralRotor rotor = Instantiate(droneRotorPrefab, droneContainer.transform);
                 rotor.gameObject.name = $"GeneratedRotor_{i}";
                 rotor.transform.localPosition = Vector3.zero;
                 rotor.transform.localRotation = Quaternion.identity;
@@ -173,6 +168,8 @@ public class RandomDronePartGenerator : MonoBehaviour
                 generatedRotors.Add(rotor);
             }
         }
+
+        Debug.Log($"[EnsureComponentsExist] Created DroneContainer with DroneMovementController (which creates its own Rigidbody)");
     }
 
     private void RandomizeLayoutInternal(int seed)
@@ -416,28 +413,15 @@ public class RandomDronePartGenerator : MonoBehaviour
 
     public void DeleteCurrentDrone()
     {
-        if (generatedBody != null)
+        if (droneContainer != null)
         {
-            DestroyImmediate(generatedBody.gameObject);
-            generatedBody = null;
+            DestroyImmediate(droneContainer);
+            droneContainer = null;
         }
 
-        foreach (var rotor in generatedRotors)
-        {
-            if (rotor != null)
-            {
-                DestroyImmediate(rotor.gameObject);
-            }
-        }
+        // Clear all references
+        generatedBody = null;
         generatedRotors.Clear();
-
-        foreach (var arm in generatedArms)
-        {
-            if (arm != null)
-            {
-                DestroyImmediate(arm);
-            }
-        }
         generatedArms.Clear();
 
         // FAILSAFE: Delete any remaining children that weren't tracked
@@ -500,7 +484,7 @@ public class RandomDronePartGenerator : MonoBehaviour
         bool needsRingAvoidance = rotor.includeRing;
         
         GameObject armObj = new GameObject($"Arm_{rotorIndex}");
-        armObj.transform.SetParent(transform);
+        armObj.transform.SetParent(droneContainer.transform);
         armObj.transform.localPosition = Vector3.zero;
         armObj.transform.localRotation = Quaternion.identity;
 

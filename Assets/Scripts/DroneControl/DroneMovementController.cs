@@ -24,14 +24,6 @@ public class DroneMovementController : MonoBehaviour
     private Vector3 velocitySmoothing = Vector3.zero;
     private float currentYawVelocity = 0f;
 
-    private void Start()
-    {
-        if (rb == null || !rb.isKinematic || rb.useGravity)
-        {
-            Debug.LogError($"[DroneMovementController] Rigidbody on {gameObject.name} must be assigned, kinematic, and have useGravity disabled.");
-        }
-    }
-
     private void Update()
     {
         // Handle keyboard input each frame
