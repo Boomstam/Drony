@@ -6,6 +6,8 @@ using UnityEditor;
 
 public class RandomDronePartGenerator : MonoBehaviour
 {
+    [SerializeField] private Camera cam;
+    
     [Header("Component References")]
     [SerializeField] private ProceduralDroneBody droneBodyPrefab;
     [SerializeField] private ProceduralRotor droneRotorPrefab;
