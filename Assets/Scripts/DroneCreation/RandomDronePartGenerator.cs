@@ -6,7 +6,7 @@ using UnityEditor;
 
 public class RandomDronePartGenerator : MonoBehaviour
 {
-    [SerializeField] private Camera cam;
+    [SerializeField] private Camera camPrefab;
     
     [Header("Component References")]
     [SerializeField] private ProceduralDroneBody droneBodyPrefab;
@@ -106,11 +106,22 @@ public class RandomDronePartGenerator : MonoBehaviour
             textureGenerator.GenerateTextures(textureSeed);
         }
         
+        // Position camera under the drone
+        PositionCamera();
+        
         #if UNITY_EDITOR
         EditorUtility.SetDirty(this);
         #endif
         
         Debug.Log($"Randomized all | mainSeed: {mainSeed} | rotorSeed: {rotorSeed} | bodySeed: {bodySeed} | armSeed: {armSeed} | textureSeed: {textureSeed}");
+    }
+
+    private void PositionCamera()
+    {
+        Camera cam = Instantiate(camPrefab);
+
+        // Parent camera to drone container
+        cam.transform.SetParent(droneContainer.transform, false);
     }
 
     public void RandomizeLayout()
@@ -173,7 +184,7 @@ public class RandomDronePartGenerator : MonoBehaviour
             }
         }
 
-        Debug.Log($"[EnsureComponentsExist] Created DroneContainer with DroneMovementController (which creates its own Rigidbody)");
+        // Debug.Log($"[EnsureComponentsExist] Created DroneContainer with DroneMovementController (which creates its own Rigidbody)");
     }
 
     private void RandomizeLayoutInternal(int seed)
@@ -189,14 +200,14 @@ public class RandomDronePartGenerator : MonoBehaviour
         if (generatedBody != null)
         {
             hubMaxDimension = Mathf.Max(generatedBody.scale.x, generatedBody.scale.y, generatedBody.scale.z);
-            Debug.Log($"[Layout] Hub max dimension: {hubMaxDimension}");
+            // Debug.Log($"[Layout] Hub max dimension: {hubMaxDimension}");
         }
         
         if (generatedRotors.Count > 0 && generatedRotors[0] != null)
         {
             ProceduralRotor rotor = generatedRotors[0];
             
-            Debug.Log($"[Layout] Rotor properties - Hub Radius: {rotor.hubRadius}, Blade Length: {rotor.bladeLength}, Blade Width: {rotor.bladeWidth}, Include Ring: {rotor.includeRing}, Ring Thickness: {rotor.ringThickness}");
+            // Debug.Log($"[Layout] Rotor properties - Hub Radius: {rotor.hubRadius}, Blade Length: {rotor.bladeLength}, Blade Width: {rotor.bladeWidth}, Include Ring: {rotor.includeRing}, Ring Thickness: {rotor.ringThickness}");
             
             // Calculate total rotor reach including:
             // - Hub radius
@@ -204,14 +215,14 @@ public class RandomDronePartGenerator : MonoBehaviour
             // - Ring thickness (if ring is enabled)
             // - Blade width (extends perpendicular, but needs buffer)
             float bladeReach = rotor.hubRadius + rotor.bladeLength;
-            Debug.Log($"[Layout] Blade reach (hub + length): {bladeReach}");
+            // Debug.Log($"[Layout] Blade reach (hub + length): {bladeReach}");
             
             float ringReach = rotor.includeRing ? (bladeReach * 1.1f + rotor.ringThickness) : bladeReach;
-            Debug.Log($"[Layout] Ring reach: {ringReach}");
+            // Debug.Log($"[Layout] Ring reach: {ringReach}");
             
             // Add blade width as additional buffer since blades can stick out at angles
             rotorTotalReach = ringReach + rotor.bladeWidth * 0.5f;
-            Debug.Log($"[Layout] Total rotor reach (with blade width buffer): {rotorTotalReach}");
+            // Debug.Log($"[Layout] Total rotor reach (with blade width buffer): {rotorTotalReach}");
         }
 
         // Calculate minimum safe distance based on rotor count and rotor-to-rotor spacing
@@ -229,21 +240,21 @@ public class RandomDronePartGenerator : MonoBehaviour
         
         // Calculate required radius from center to achieve this rotor-to-rotor distance
         float minRadiusForRotorSpacing = minRotorToRotorDistance / (2f * Mathf.Sin(halfAngle));
-        Debug.Log($"[Layout] Rotor count: {rotorCount}, Angle between: {angleStep}°, Min rotor-to-rotor distance: {minRotorToRotorDistance}, Required radius: {minRadiusForRotorSpacing}");
+        // Debug.Log($"[Layout] Rotor count: {rotorCount}, Angle between: {angleStep}°, Min rotor-to-rotor distance: {minRotorToRotorDistance}, Required radius: {minRadiusForRotorSpacing}");
         
         // Also ensure rotors clear the hub
         float minRadiusForHubClearance = (hubMaxDimension * 0.5f) + rotorTotalReach + 0.3f;
-        Debug.Log($"[Layout] Min radius for hub clearance: {minRadiusForHubClearance}");
+        // Debug.Log($"[Layout] Min radius for hub clearance: {minRadiusForHubClearance}");
         
         // Use the larger of the two requirements
         float minSafeDistance = Mathf.Max(minRadiusForRotorSpacing, minRadiusForHubClearance);
-        Debug.Log($"[Layout] Calculated min safe distance: {minSafeDistance}");
+        // Debug.Log($"[Layout] Calculated min safe distance: {minSafeDistance}");
         
         float actualMinDistance = Mathf.Max(rotorDistanceRange.x, minSafeDistance);
-        Debug.Log($"[Layout] Actual min distance after range check: {actualMinDistance} (range min: {rotorDistanceRange.x}, range max: {rotorDistanceRange.y})");
+        // Debug.Log($"[Layout] Actual min distance after range check: {actualMinDistance} (range min: {rotorDistanceRange.x}, range max: {rotorDistanceRange.y})");
         
         float randomValue = Random.value;
-        Debug.Log($"[Layout] Random value for distance lerp: {randomValue}, Lerp range: [{actualMinDistance}, {rotorDistanceRange.y}]");
+        // Debug.Log($"[Layout] Random value for distance lerp: {randomValue}, Lerp range: [{actualMinDistance}, {rotorDistanceRange.y}]");
         
         // CRITICAL FIX: If calculated minimum is greater than range maximum, use the minimum
         float effectiveMax = Mathf.Max(actualMinDistance, rotorDistanceRange.y);
@@ -256,8 +267,8 @@ public class RandomDronePartGenerator : MonoBehaviour
         currentVerticalOffset = Mathf.Lerp(rotorVerticalOffsetRange.x, rotorVerticalOffsetRange.y, Random.value);
         currentTiltAngle = Mathf.Lerp(rotorTiltAngleRange.x, rotorTiltAngleRange.y, Random.value);
 
-        Debug.Log($"[Layout] Final rotor distance: {currentRotorDistance}, Vertical offset: {currentVerticalOffset}, Tilt angle: {currentTiltAngle}");
-        Debug.Log($"[Layout] Rotor count: {rotorCount}, Generated rotors: {generatedRotors.Count}");
+        // Debug.Log($"[Layout] Final rotor distance: {currentRotorDistance}, Vertical offset: {currentVerticalOffset}, Tilt angle: {currentTiltAngle}");
+        // Debug.Log($"[Layout] Rotor count: {rotorCount}, Generated rotors: {generatedRotors.Count}");
 
         // Safety check: Ensure we have the right number of rotors
         if (generatedRotors.Count != rotorCount)
@@ -285,18 +296,18 @@ public class RandomDronePartGenerator : MonoBehaviour
                     generatedRotors[i].transform.localRotation = Quaternion.Euler(currentTiltAngle, 0, 0);
                     generatedRotors[i].gameObject.SetActive(true);
                     
-                    Debug.Log($"[Layout] Rotor {i}: Angle={angle * Mathf.Rad2Deg:F1}°, Position=({position.x:F2}, {position.y:F2}, {position.z:F2}), Distance from center={position.magnitude:F2}");
+                    // Debug.Log($"[Layout] Rotor {i}: Angle={angle * Mathf.Rad2Deg:F1}°, Position=({position.x:F2}, {position.y:F2}, {position.z:F2}), Distance from center={position.magnitude:F2}");
                 }
                 else
                 {
                     // Deactivate extra rotors (shouldn't happen with the fix, but safety check)
                     generatedRotors[i].gameObject.SetActive(false);
-                    Debug.Log($"[Layout] Rotor {i}: Deactivated (extra)");
+                    // Debug.Log($"[Layout] Rotor {i}: Deactivated (extra)");
                 }
             }
         }
         
-        Debug.Log($"Randomized layout with seed: {seed} | Rotors: {rotorCount} | Distance: {currentRotorDistance:F2}");
+        // Debug.Log($"Randomized layout with seed: {seed} | Rotors: {rotorCount} | Distance: {currentRotorDistance:F2}");
     }
 
     public void RandomizeRotor()
@@ -320,7 +331,7 @@ public class RandomDronePartGenerator : MonoBehaviour
         EditorUtility.SetDirty(this);
         #endif
 
-        Debug.Log($"Randomized rotor with seed: {rotorSeed}");
+        // Debug.Log($"Randomized rotor with seed: {rotorSeed}");
     }
 
     private void RandomizeRotorInternal()
