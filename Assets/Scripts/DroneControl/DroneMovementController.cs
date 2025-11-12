@@ -58,20 +58,25 @@ public class DroneMovementController : MonoBehaviour
     /// </summary>
     private void HandleKeyboardInput()
     {
-        Vector3 targetVelocity = Vector3.zero;
+        Vector3 localInput = Vector3.zero;
 
-        // WASD for horizontal world-space movement
-        if (Input.GetKey(KeyCode.W)) targetVelocity += Vector3.forward;
-        if (Input.GetKey(KeyCode.S)) targetVelocity += Vector3.back;
-        if (Input.GetKey(KeyCode.A)) targetVelocity += Vector3.left;
-        if (Input.GetKey(KeyCode.D)) targetVelocity += Vector3.right;
+        // WASD for horizontal movement (local to drone's yaw)
+        if (Input.GetKey(KeyCode.W)) localInput += Vector3.forward;
+        if (Input.GetKey(KeyCode.S)) localInput += Vector3.back;
+        if (Input.GetKey(KeyCode.A)) localInput += Vector3.left;
+        if (Input.GetKey(KeyCode.D)) localInput += Vector3.right;
 
         // Normalize horizontal input
-        Vector3 horizontalInput = new Vector3(targetVelocity.x, 0, targetVelocity.z);
+        Vector3 horizontalInput = new Vector3(localInput.x, 0, localInput.z);
         if (horizontalInput.magnitude > 1f)
             horizontalInput.Normalize();
 
-        targetVelocity = horizontalInput * horizontalSpeed;
+        // Convert local input to world space based on current yaw
+        float currentYaw = rb.rotation.eulerAngles.y;
+        Quaternion yawRotation = Quaternion.Euler(0, currentYaw, 0);
+        Vector3 worldInput = yawRotation * horizontalInput;
+
+        Vector3 targetVelocity = worldInput * horizontalSpeed;
 
         // Shift/Ctrl for vertical movement
         if (Input.GetKey(KeyCode.LeftShift)) targetVelocity.y = verticalSpeed;
@@ -80,7 +85,7 @@ public class DroneMovementController : MonoBehaviour
         // Smooth velocity change
         currentVelocity = Vector3.SmoothDamp(currentVelocity, targetVelocity, ref velocitySmoothing, accelerationTime);
 
-        // Tilt visuals
+        // Tilt visuals based on local input direction
         ApplyTiltFromInput(horizontalInput);
     }
 
@@ -128,8 +133,8 @@ public class DroneMovementController : MonoBehaviour
 
         if (horizontalInput.magnitude > 0.01f)
         {
-            targetPitch = -horizontalInput.z * maxPitchTilt; // Forward/back tilt
-            targetRoll = -horizontalInput.x * maxRollTilt;   // Left/right bank
+            targetPitch = horizontalInput.z * maxPitchTilt; // Forward/back tilt (positive = forward)
+            targetRoll = -horizontalInput.x * maxRollTilt;  // Left/right bank
         }
 
         currentPitch = Mathf.SmoothDamp(currentPitch, targetPitch, ref pitchVelocity, tiltSmoothTime);

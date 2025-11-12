@@ -63,6 +63,8 @@ public class RandomDronePartGenerator : MonoBehaviour
 
     public void RandomizeAll()
     {
+        DeleteCurrentDrone();
+        
         mainSeed = Random.Range(0, 1000000);
         rotorSeed = Random.Range(0, 1000000);
         bodySeed = Random.Range(0, 1000000);
