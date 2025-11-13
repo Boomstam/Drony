@@ -24,6 +24,10 @@ public class DroneMovementController : MonoBehaviour
     [SerializeField] private float maxRollTilt = 20f;  // degrees for left/right movement
     [SerializeField] private float tiltSmoothTime = 0.15f;
 
+    [Header("Terrain Avoidance")]
+    [SerializeField] private float minTerrainOffset = 2f; // Minimum height above terrain
+    [SerializeField] private float terrainCheckInterval = 0.1f; // How often to check terrain height (seconds)
+
     [Header("AI / Autopilot")]
     [SerializeField] private Transform target; // Optional move-to target
     [SerializeField] private float targetArrivalThreshold = 0.5f;
@@ -39,8 +43,62 @@ public class DroneMovementController : MonoBehaviour
     private float pitchVelocity = 0f;
     private float rollVelocity = 0f;
 
+    // Terrain height caching
+    private float cachedTerrainHeight;
+    private float cachedTargetTerrainHeight;
+    private float terrainCheckTimer = 0f;
+    private Terrain cachedTerrain;
+
+    // Initial climb state
+    private bool hasStartedMovement = false;
+    private bool isPerformingInitialClimb = false;
+    private Transform previousTarget = null;
+
+    private void Awake()
+    {
+        // Cache terrain reference for faster lookups
+        cachedTerrain = Terrain.activeTerrain;
+        
+        if (cachedTerrain == null)
+        {
+            Debug.LogWarning("DroneMovementController: No active terrain found! Terrain avoidance will not work.");
+        }
+    }
+
     private void Update()
     {
+        // Detect when target is first assigned
+        if (target != null && target != previousTarget)
+        {
+            hasStartedMovement = false;
+            isPerformingInitialClimb = false;
+            previousTarget = target;
+            
+            // Initialize terrain cache immediately when target is assigned
+            if (cachedTerrain != null)
+            {
+                cachedTerrainHeight = cachedTerrain.SampleHeight(rb.position);
+                cachedTargetTerrainHeight = cachedTerrain.SampleHeight(target.position);
+                terrainCheckTimer = 0f;
+            }
+        }
+        else if (target == null)
+        {
+            previousTarget = null;
+        }
+
+        // Only update terrain height cache when in autopilot mode
+        if (target != null && cachedTerrain != null)
+        {
+            terrainCheckTimer += Time.deltaTime;
+            if (terrainCheckTimer >= terrainCheckInterval)
+            {
+                cachedTerrainHeight = cachedTerrain.SampleHeight(rb.position);
+                cachedTargetTerrainHeight = cachedTerrain.SampleHeight(target.position);
+                terrainCheckTimer = 0f;
+            }
+        }
+
         // If target assigned, move toward it; else handle manual input
         if (target != null)
             HandleTargetMovement();
@@ -58,8 +116,6 @@ public class DroneMovementController : MonoBehaviour
     /// </summary>
     private void OnTriggerEnter(Collider other)
     {
-        Debug.Log($"Triggered by: {other.gameObject.name}");
-        
         // Check if we hit terrain
         if (other.GetComponent<Terrain>() != null || 
             other.GetComponent<TerrainCollider>() != null)
@@ -74,7 +130,18 @@ public class DroneMovementController : MonoBehaviour
     private void OnHitTerrain(Collider terrainCollider)
     {
         Debug.LogError($"Drone hit terrain '{terrainCollider.gameObject.name}' at position {transform.position}! Disabling rigidbody.");
-        rb.linearVelocity = Vector3.zero;
+        rb.linearVelocity = rb.angularVelocity = Vector3.zero;
+        
+        // Stop all rotors
+        ProceduralRotor[] rotors = GetComponentsInChildren<ProceduralRotor>();
+        foreach (var rotor in rotors)
+        {
+            if (rotor != null)
+                rotor.enabled = false;
+        }
+        
+        rb.isKinematic = false;
+        rb.useGravity = true;
         enabled = false; // Disable this script
     }
 
@@ -115,12 +182,51 @@ public class DroneMovementController : MonoBehaviour
     }
 
     /// <summary>
-    /// Automatically move toward a target if assigned.
+    /// Automatically move toward a target if assigned, maintaining terrain clearance.
+    /// Uses cached terrain height values for performance.
     /// </summary>
     private void HandleTargetMovement()
     {
         if (target == null) return;
 
+        float currentHeight = rb.position.y;
+        float desiredHeight = cachedTerrainHeight + minTerrainOffset;
+
+        // Check if we need to perform initial climb on first movement
+        if (!hasStartedMovement && cachedTerrain != null)
+        {
+            if (currentHeight < desiredHeight - 0.1f)
+            {
+                // Need to climb first
+                isPerformingInitialClimb = true;
+                PerformInitialClimb(desiredHeight);
+                return;
+            }
+            else
+            {
+                // Already at safe height, can start moving
+                hasStartedMovement = true;
+                isPerformingInitialClimb = false;
+            }
+        }
+
+        // If still climbing, continue until we reach safe height
+        if (isPerformingInitialClimb)
+        {
+            if (currentHeight >= desiredHeight - 0.1f)
+            {
+                // Reached safe height, can start moving horizontally
+                hasStartedMovement = true;
+                isPerformingInitialClimb = false;
+            }
+            else
+            {
+                PerformInitialClimb(desiredHeight);
+                return;
+            }
+        }
+
+        // Normal target following logic
         Vector3 toTarget = target.position - rb.position;
         float distance = toTarget.magnitude;
 
@@ -133,9 +239,23 @@ public class DroneMovementController : MonoBehaviour
         Vector3 moveDir = toTarget.normalized;
         Vector3 desiredVelocity = moveDir * horizontalSpeed;
 
-        // Adjust vertical component separately
-        float verticalDelta = target.position.y - rb.position.y;
-        desiredVelocity.y = Mathf.Clamp(verticalDelta, -1f, 1f) * verticalSpeed;
+        // Adjust vertical component to maintain terrain clearance
+        float heightDifference = desiredHeight - currentHeight;
+        
+        // If we're below minimum terrain offset, prioritize climbing
+        if (heightDifference > 0.1f)
+        {
+            desiredVelocity.y = Mathf.Clamp(heightDifference, 0f, 1f) * verticalSpeed;
+        }
+        else
+        {
+            // Normal target following with terrain consideration
+            float targetHeight = target.position.y;
+            float safeTargetHeight = Mathf.Max(targetHeight, cachedTargetTerrainHeight + minTerrainOffset);
+            
+            float verticalDelta = safeTargetHeight - currentHeight;
+            desiredVelocity.y = Mathf.Clamp(verticalDelta, -1f, 1f) * verticalSpeed;
+        }
 
         // Smooth velocity change
         currentVelocity = Vector3.SmoothDamp(currentVelocity, desiredVelocity, ref velocitySmoothing, accelerationTime);
@@ -146,6 +266,24 @@ public class DroneMovementController : MonoBehaviour
         // Apply tilt for visuals based on horizontal movement
         Vector3 horizontalDir = new Vector3(moveDir.x, 0f, moveDir.z);
         ApplyTiltFromInput(horizontalDir);
+    }
+
+    /// <summary>
+    /// Performs initial climb to minimum terrain clearance before allowing horizontal movement.
+    /// </summary>
+    private void PerformInitialClimb(float desiredHeight)
+    {
+        float currentHeight = rb.position.y;
+        float heightDifference = desiredHeight - currentHeight;
+        
+        // Only vertical movement during initial climb
+        Vector3 climbVelocity = Vector3.zero;
+        climbVelocity.y = Mathf.Clamp(heightDifference, 0f, 1f) * verticalSpeed;
+        
+        currentVelocity = Vector3.SmoothDamp(currentVelocity, climbVelocity, ref velocitySmoothing, accelerationTime);
+        
+        // No tilt during initial climb
+        ApplyTiltFromInput(Vector3.zero);
     }
 
     /// <summary>
@@ -254,6 +392,22 @@ public class DroneMovementController : MonoBehaviour
         {
             Gizmos.color = Color.red;
             Gizmos.DrawLine(rb.position, target.position);
+        }
+
+        // Draw terrain clearance indicator (only in autopilot mode)
+        if (target != null && cachedTerrain != null)
+        {
+            Gizmos.color = Color.yellow;
+            Vector3 terrainPoint = new Vector3(rb.position.x, cachedTerrainHeight, rb.position.z);
+            Gizmos.DrawLine(terrainPoint, terrainPoint + Vector3.up * minTerrainOffset);
+            Gizmos.DrawWireSphere(terrainPoint + Vector3.up * minTerrainOffset, 0.2f);
+            
+            // Draw indicator if performing initial climb
+            if (isPerformingInitialClimb)
+            {
+                Gizmos.color = Color.cyan;
+                Gizmos.DrawWireSphere(rb.position, 0.5f);
+            }
         }
     }
 }

@@ -1105,11 +1105,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rb: {fileID: 5608105800377755938}
-  horizontalSpeed: 5
-  verticalSpeed: 3
-  yawSpeed: 90
+  horizontalSpeed: 100
+  verticalSpeed: 80
+  yawSpeed: 180
   accelerationTime: 0.2
   rotationSmoothTime: 0.1
+  maxPitchTilt: 25
+  maxRollTilt: 20
+  tiltSmoothTime: 0.15
+  minTerrainOffset: 25
+  terrainCheckInterval: 0.1
+  target: {fileID: 0}
+  targetArrivalThreshold: 0.5
 --- !u!54 &5608105800377755938
 Rigidbody:
   m_ObjectHideFlags: 0
