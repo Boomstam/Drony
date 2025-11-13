@@ -54,6 +54,31 @@ public class DroneMovementController : MonoBehaviour
     }
 
     /// <summary>
+    /// Trigger detection for kinematic rigidbody hitting terrain.
+    /// </summary>
+    private void OnTriggerEnter(Collider other)
+    {
+        Debug.Log($"Triggered by: {other.gameObject.name}");
+        
+        // Check if we hit terrain
+        if (other.GetComponent<Terrain>() != null || 
+            other.GetComponent<TerrainCollider>() != null)
+        {
+            OnHitTerrain(other);
+        }
+    }
+
+    /// <summary>
+    /// Called when drone collides with terrain.
+    /// </summary>
+    private void OnHitTerrain(Collider terrainCollider)
+    {
+        Debug.LogError($"Drone hit terrain '{terrainCollider.gameObject.name}' at position {transform.position}! Disabling rigidbody.");
+        rb.linearVelocity = Vector3.zero;
+        enabled = false; // Disable this script
+    }
+
+    /// <summary>
     /// Manual control via keyboard input.
     /// </summary>
     private void HandleKeyboardInput()
